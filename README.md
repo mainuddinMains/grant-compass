@@ -34,7 +34,7 @@ Click **Try Demo** on the homepage to run a pre-filled search about microplastic
 | Framework | Next.js 16 (App Router) |
 | Language | TypeScript |
 | Styling | Tailwind CSS v4 |
-| AI | Claude (`claude-sonnet-4-20250514`) via `@anthropic-ai/sdk` |
+| AI | Claude (`claude-sonnet-4-6`) via `@anthropic-ai/sdk` |
 | HTTP client | Axios |
 | Deployment | Vercel |
 

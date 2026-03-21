@@ -40,12 +40,19 @@ export async function POST(req: NextRequest) {
 
   const userMessage = `Researcher description:\n${researchDescription}\n\nGrants:\n${grantsText}`;
 
-  const response = await client.messages.create({
-    model: 'claude-sonnet-4-20250514',
-    max_tokens: 2048,
-    system: SYSTEM_PROMPT,
-    messages: [{ role: 'user', content: userMessage }],
-  });
+  let response;
+  try {
+    response = await client.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 2048,
+      system: SYSTEM_PROMPT,
+      messages: [{ role: 'user', content: userMessage }],
+    });
+  } catch (err) {
+    console.error('[/api/match] Claude API error:', err);
+    const message = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: 'Claude API error', detail: message }, { status: 502 });
+  }
 
   const text = response.content
     .filter((b) => b.type === 'text')
@@ -59,6 +66,7 @@ export async function POST(req: NextRequest) {
   try {
     ranked = JSON.parse(json);
   } catch {
+    console.error('[/api/match] JSON parse failed, raw response:', text);
     return NextResponse.json({ error: 'Failed to parse Claude response', raw: text }, { status: 502 });
   }
 
