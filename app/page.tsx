@@ -3,121 +3,88 @@
 import { useState } from 'react';
 import SearchBar from '@/components/SearchBar';
 import GrantCard from '@/components/GrantCard';
-import LetterModal from '@/components/LetterModal';
 import type { Grant } from '@/lib/nih';
 
 interface MatchResult {
-  rank: number;
-  grantIndex: number;
-  matchScore: number;
-  title: string;
-  reasoning: string;
-  keyAlignments: string[];
+  grantId: number;
+  score: number;
+  reason: string;
+  grant: Grant;
 }
 
-interface MatchResponse {
-  matches: MatchResult[];
-  coverLetter: string;
+// Pull up to 8 meaningful words from the description to use as the keyword query
+function extractKeywords(description: string): string {
+  const stopWords = new Set(['a', 'an', 'the', 'and', 'or', 'of', 'in', 'to', 'for', 'is', 'on', 'with', 'that', 'this', 'it', 'by', 'are', 'at', 'be', 'as', 'my', 'i', 'we', 'our']);
+  return description
+    .toLowerCase()
+    .replace(/[^a-z\s]/g, ' ')
+    .split(/\s+/)
+    .filter((w) => w.length > 3 && !stopWords.has(w))
+    .slice(0, 8)
+    .join(' ');
 }
 
 export default function Home() {
-  const [grants, setGrants] = useState<Grant[]>([]);
-  const [matches, setMatches] = useState<MatchResult[]>([]);
-  const [coverLetter, setCoverLetter] = useState('');
+  const [matchResults, setMatchResults] = useState<MatchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [isMatching, setIsMatching] = useState(false);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [activeGrant, setActiveGrant] = useState<Grant | null>(null);
-  const [errors, setErrors] = useState<string[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleSearch = async (query: string, profile: string) => {
+  const handleSearch = async (description: string) => {
     setIsSearching(true);
-    setGrants([]);
-    setMatches([]);
-    setCoverLetter('');
-    setErrors([]);
+    setMatchResults([]);
+    setError(null);
 
     try {
-      const res = await fetch(`/api/grants?q=${encodeURIComponent(query)}`);
-      const data = await res.json();
+      // Step 1: fetch grants using keywords extracted from the description
+      const keywords = extractKeywords(description);
+      const grantsRes = await fetch(`/api/grants?q=${encodeURIComponent(keywords)}`);
 
-      const fetched: Grant[] = data.grants ?? [];
-      setGrants(fetched);
+      if (!grantsRes.ok) throw new Error(`Grants API error: ${grantsRes.status}`);
 
-      if (fetched.length === 0) {
-        setIsSearching(false);
+      const grantsData = await grantsRes.json();
+      const grants: Grant[] = grantsData.grants ?? [];
+
+      if (grants.length === 0) {
+        setError('No grants found for your research area. Try rephrasing your description.');
         return;
       }
 
-      // Pipe into the match API
+      // Step 2: rank grants against the full description via Claude
       setIsMatching(true);
       setIsSearching(false);
 
       const matchRes = await fetch('/api/match', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          researcherProfile: profile,
-          grants: fetched.map((g) => ({
-            title: g.title,
-            agency: g.agency,
-            abstract: g.description,
-          })),
-        }),
+        body: JSON.stringify({ researchDescription: description, grants }),
       });
 
-      const reader = matchRes.body?.getReader();
-      const decoder = new TextDecoder();
-      let raw = '';
+      if (!matchRes.ok) throw new Error(`Match API error: ${matchRes.status}`);
 
-      if (reader) {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          raw += decoder.decode(value, { stream: true });
-        }
-      }
-
-      try {
-        const parsed: MatchResponse = JSON.parse(raw);
-        setMatches(parsed.matches ?? []);
-        setCoverLetter(parsed.coverLetter ?? '');
-      } catch {
-        setErrors((prev) => [...prev, 'Failed to parse match results from Claude.']);
-      }
+      const matchData = await matchRes.json();
+      setMatchResults(matchData.results ?? []);
     } catch (err) {
-      setErrors([err instanceof Error ? err.message : 'Unexpected error']);
+      setError(err instanceof Error ? err.message : 'Unexpected error');
     } finally {
       setIsSearching(false);
       setIsMatching(false);
     }
   };
 
-  const openLetter = (grant: Grant) => {
-    setActiveGrant(grant);
-    setModalOpen(true);
-  };
-
-  const matchedGrants = matches
-    .map((m) => ({ match: m, grant: grants[m.grantIndex] }))
-    .filter((x) => x.grant);
-
-  const unmatchedGrants = grants.filter(
-    (_, i) => !matches.some((m) => m.grantIndex === i)
-  );
-
   const isLoading = isSearching || isMatching;
 
   return (
     <main className="min-h-screen bg-gray-50">
       <div className="mx-auto max-w-3xl px-4 py-12 flex flex-col gap-10">
+
         {/* Header */}
         <div className="text-center">
           <h1 className="text-4xl font-bold tracking-tight text-gray-900">
             Grant Compass
           </h1>
           <p className="mt-2 text-gray-500">
-            Find NIH &amp; NSF grants matched to your research profile with AI.
+            Describe your research and we&apos;ll find the best NIH &amp; NSF grants for you.
           </p>
         </div>
 
@@ -126,83 +93,67 @@ export default function Home() {
           <SearchBar onSearch={handleSearch} isLoading={isLoading} />
         </div>
 
-        {/* Status */}
+        {/* Status banners */}
         {isSearching && (
-          <p className="text-center text-sm text-gray-500 animate-pulse">
-            Fetching grants from NIH and NSF…
-          </p>
+          <StatusBanner message="Fetching grants from NIH and NSF…" />
         )}
         {isMatching && (
-          <p className="text-center text-sm text-gray-500 animate-pulse">
-            Claude is analyzing matches…
-          </p>
+          <StatusBanner message="Claude is ranking grants by relevance…" />
         )}
 
-        {/* Errors */}
-        {errors.length > 0 && (
+        {/* Error */}
+        {error && (
           <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
-            {errors.map((e, i) => (
-              <p key={i}>{e}</p>
-            ))}
+            {error}
           </div>
         )}
 
-        {/* Top matches */}
-        {matchedGrants.length > 0 && (
+        {/* Results */}
+        {matchResults.length > 0 && (
           <section className="flex flex-col gap-4">
             <h2 className="text-lg font-semibold text-gray-800">
-              Top Matches{' '}
-              <span className="text-gray-400 font-normal">({matchedGrants.length})</span>
+              Matched Grants{' '}
+              <span className="font-normal text-gray-400">({matchResults.length})</span>
             </h2>
-            {matchedGrants.map(({ match, grant }) => (
+
+            {matchResults.map((result, i) => (
               <GrantCard
-                key={`match-${match.grantIndex}`}
-                title={grant.title}
-                agency={grant.agency}
-                abstract={grant.description}
-                amount={grant.amount ?? undefined}
-                endDate={grant.deadline ?? undefined}
-                url={grant.url}
-                matchScore={match.matchScore}
-                reasoning={match.reasoning}
-                keyAlignments={match.keyAlignments}
-                rank={match.rank}
-                onGenerateLetter={match.rank === 1 ? () => openLetter(grant) : undefined}
+                key={`${result.grantId}-${i}`}
+                rank={i + 1}
+                grant={{
+                  title: result.grant.title,
+                  agency: result.grant.agency,
+                  score: result.score,
+                  reason: result.reason,
+                  amount: result.grant.amount,
+                  deadline: result.grant.deadline,
+                  description: result.grant.description,
+                  url: result.grant.url,
+                }}
               />
             ))}
           </section>
         )}
 
-        {/* All other results */}
-        {unmatchedGrants.length > 0 && (
-          <section className="flex flex-col gap-4">
-            <h2 className="text-lg font-semibold text-gray-800">
-              All Results{' '}
-              <span className="text-gray-400 font-normal">({unmatchedGrants.length})</span>
-            </h2>
-            {unmatchedGrants.map((grant, i) => (
-              <GrantCard
-                key={`unmatched-${i}`}
-                title={grant.title}
-                agency={grant.agency}
-                abstract={grant.description}
-                amount={grant.amount ?? undefined}
-                endDate={grant.deadline ?? undefined}
-                url={grant.url}
-              />
-            ))}
-          </section>
-        )}
       </div>
-
-      {/* Cover letter modal */}
-      {modalOpen && activeGrant && (
-        <LetterModal
-          letter={coverLetter}
-          grantTitle={activeGrant.title}
-          onClose={() => setModalOpen(false)}
-        />
-      )}
     </main>
+  );
+}
+
+function StatusBanner({ message }: { message: string }) {
+  return (
+    <div className="flex items-center justify-center gap-2 text-sm text-gray-500">
+      <svg
+        className="animate-spin h-4 w-4 text-blue-500"
+        xmlns="http://www.w3.org/2000/svg"
+        fill="none"
+        viewBox="0 0 24 24"
+        aria-hidden="true"
+      >
+        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+      </svg>
+      {message}
+    </div>
   );
 }
