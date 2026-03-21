@@ -3,6 +3,8 @@ import { fetchNIHGrants } from '@/lib/nih';
 import { fetchNSFGrants } from '@/lib/nsf';
 import type { Grant } from '@/lib/nih';
 
+export const maxDuration = 30;
+
 export async function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams.get('q')?.trim();
 
