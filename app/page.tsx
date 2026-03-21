@@ -3,7 +3,9 @@
 import { useState } from 'react';
 import SearchBar from '@/components/SearchBar';
 import GrantCard from '@/components/GrantCard';
+import LetterModal from '@/components/LetterModal';
 import type { Grant } from '@/lib/nih';
+import type { GrantProps } from '@/components/GrantCard';
 
 interface MatchResult {
   grantId: number;
@@ -29,8 +31,11 @@ export default function Home() {
   const [isSearching, setIsSearching] = useState(false);
   const [isMatching, setIsMatching] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [researchDescription, setResearchDescription] = useState('');
+  const [activeGrant, setActiveGrant] = useState<GrantProps | null>(null);
 
   const handleSearch = async (description: string) => {
+    setResearchDescription(description);
     setIsSearching(true);
     setMatchResults([]);
     setError(null);
@@ -116,26 +121,38 @@ export default function Home() {
               <span className="font-normal text-gray-400">({matchResults.length})</span>
             </h2>
 
-            {matchResults.map((result, i) => (
-              <GrantCard
-                key={`${result.grantId}-${i}`}
-                rank={i + 1}
-                grant={{
-                  title: result.grant.title,
-                  agency: result.grant.agency,
-                  score: result.score,
-                  reason: result.reason,
-                  amount: result.grant.amount,
-                  deadline: result.grant.deadline,
-                  description: result.grant.description,
-                  url: result.grant.url,
-                }}
-              />
-            ))}
+            {matchResults.map((result, i) => {
+              const grantProps: GrantProps = {
+                title: result.grant.title,
+                agency: result.grant.agency,
+                score: result.score,
+                reason: result.reason,
+                amount: result.grant.amount,
+                deadline: result.grant.deadline,
+                description: result.grant.description,
+                url: result.grant.url,
+              };
+              return (
+                <GrantCard
+                  key={`${result.grantId}-${i}`}
+                  rank={i + 1}
+                  grant={grantProps}
+                  onGenerateLetter={() => setActiveGrant(grantProps)}
+                />
+              );
+            })}
           </section>
         )}
 
       </div>
+
+      {activeGrant && (
+        <LetterModal
+          grant={activeGrant}
+          researchDescription={researchDescription}
+          onClose={() => setActiveGrant(null)}
+        />
+      )}
     </main>
   );
 }
