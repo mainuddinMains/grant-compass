@@ -4,8 +4,7 @@ import { useState } from 'react';
 import SearchBar from '@/components/SearchBar';
 import GrantCard from '@/components/GrantCard';
 import LetterModal from '@/components/LetterModal';
-import type { NIHGrant } from '@/lib/nih';
-import type { NSFAward } from '@/lib/nsf';
+import type { Grant } from '@/lib/nih';
 
 interface MatchResult {
   rank: number;
@@ -21,54 +20,14 @@ interface MatchResponse {
   coverLetter: string;
 }
 
-interface CombinedGrant {
-  source: 'NIH' | 'NSF';
-  title: string;
-  agency: string;
-  abstract: string;
-  amount?: string | number;
-  startDate?: string;
-  endDate?: string;
-  pi?: string;
-  raw: NIHGrant | NSFAward;
-}
-
-function nihToGrant(g: NIHGrant): CombinedGrant {
-  return {
-    source: 'NIH',
-    title: g.project_title,
-    agency: `NIH – ${g.agency_ic_admin?.abbreviation ?? ''}`,
-    abstract: g.abstract_text ?? '',
-    amount: g.award_amount,
-    startDate: g.project_start_date?.slice(0, 10),
-    endDate: g.project_end_date?.slice(0, 10),
-    pi: g.contact_pi_name,
-    raw: g,
-  };
-}
-
-function nsfToGrant(g: NSFAward): CombinedGrant {
-  return {
-    source: 'NSF',
-    title: g.title,
-    agency: `NSF – ${g.primaryProgram ?? ''}`,
-    abstract: g.abstractText ?? '',
-    amount: g.fundsObligatedAmt,
-    startDate: g.date,
-    endDate: g.expDate,
-    pi: `${g.piFirstName ?? ''} ${g.piLastName ?? ''}`.trim(),
-    raw: g,
-  };
-}
-
 export default function Home() {
-  const [grants, setGrants] = useState<CombinedGrant[]>([]);
+  const [grants, setGrants] = useState<Grant[]>([]);
   const [matches, setMatches] = useState<MatchResult[]>([]);
   const [coverLetter, setCoverLetter] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [isMatching, setIsMatching] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
-  const [activeGrant, setActiveGrant] = useState<CombinedGrant | null>(null);
+  const [activeGrant, setActiveGrant] = useState<Grant | null>(null);
   const [errors, setErrors] = useState<string[]>([]);
 
   const handleSearch = async (query: string, profile: string) => {
@@ -79,22 +38,13 @@ export default function Home() {
     setErrors([]);
 
     try {
-      const res = await fetch('/api/grants', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query }),
-      });
+      const res = await fetch(`/api/grants?q=${encodeURIComponent(query)}`);
       const data = await res.json();
 
-      const combined: CombinedGrant[] = [
-        ...(data.nih as NIHGrant[]).map(nihToGrant),
-        ...(data.nsf as NSFAward[]).map(nsfToGrant),
-      ];
+      const fetched: Grant[] = data.grants ?? [];
+      setGrants(fetched);
 
-      setGrants(combined);
-      if (data.errors?.length) setErrors(data.errors);
-
-      if (combined.length === 0) {
+      if (fetched.length === 0) {
         setIsSearching(false);
         return;
       }
@@ -108,10 +58,10 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           researcherProfile: profile,
-          grants: combined.map((g) => ({
+          grants: fetched.map((g) => ({
             title: g.title,
             agency: g.agency,
-            abstract: g.abstract,
+            abstract: g.description,
           })),
         }),
       });
@@ -143,7 +93,7 @@ export default function Home() {
     }
   };
 
-  const openLetter = (grant: CombinedGrant) => {
+  const openLetter = (grant: Grant) => {
     setActiveGrant(grant);
     setModalOpen(true);
   };
@@ -206,14 +156,13 @@ export default function Home() {
             </h2>
             {matchedGrants.map(({ match, grant }) => (
               <GrantCard
-                key={`${grant.source}-${match.grantIndex}`}
+                key={`match-${match.grantIndex}`}
                 title={grant.title}
                 agency={grant.agency}
-                abstract={grant.abstract}
-                amount={grant.amount}
-                startDate={grant.startDate}
-                endDate={grant.endDate}
-                pi={grant.pi}
+                abstract={grant.description}
+                amount={grant.amount ?? undefined}
+                endDate={grant.deadline ?? undefined}
+                url={grant.url}
                 matchScore={match.matchScore}
                 reasoning={match.reasoning}
                 keyAlignments={match.keyAlignments}
@@ -233,14 +182,13 @@ export default function Home() {
             </h2>
             {unmatchedGrants.map((grant, i) => (
               <GrantCard
-                key={`${grant.source}-unmatched-${i}`}
+                key={`unmatched-${i}`}
                 title={grant.title}
                 agency={grant.agency}
-                abstract={grant.abstract}
-                amount={grant.amount}
-                startDate={grant.startDate}
-                endDate={grant.endDate}
-                pi={grant.pi}
+                abstract={grant.description}
+                amount={grant.amount ?? undefined}
+                endDate={grant.deadline ?? undefined}
+                url={grant.url}
               />
             ))}
           </section>

@@ -1,38 +1,43 @@
 import axios from 'axios';
 
-export interface NIHGrant {
-  appl_id: number;
+export interface Grant {
+  title: string;
+  description: string;
+  deadline: string | null;
+  amount: number | null;
+  agency: string;
+  url: string;
+}
+
+interface NIHProject {
   project_title: string;
   abstract_text: string;
-  agency_ic_admin: { abbreviation: string };
-  fiscal_year: number;
-  award_amount: number;
-  project_start_date: string;
   project_end_date: string;
-  org_name: string;
-  contact_pi_name: string;
-  opportunity_number?: string;
+  award_amount: number;
+  agency_ic_admin: { abbreviation: string };
+  appl_id: number;
 }
 
 interface NIHSearchResult {
   meta: { total: number };
-  results: NIHGrant[];
+  results: NIHProject[];
 }
 
-export async function searchNIHGrants(query: string, limit = 10): Promise<NIHGrant[]> {
+export async function fetchNIHGrants(keyword: string): Promise<Grant[]> {
   const response = await axios.post<NIHSearchResult>(
     'https://api.reporter.nih.gov/v2/projects/search',
     {
-      criteria: {
-        advanced_text_search: {
-          operator: 'and',
-          search_field: 'all',
-          search_text: query,
-        },
-      },
-      limit,
-      offset: 0,
+      criteria: { terms: keyword },
+      limit: 10,
     }
   );
-  return response.data.results || [];
+
+  return (response.data.results ?? []).map((p) => ({
+    title: p.project_title ?? '',
+    description: p.abstract_text ?? '',
+    deadline: p.project_end_date ? p.project_end_date.slice(0, 10) : null,
+    amount: p.award_amount ?? null,
+    agency: `NIH – ${p.agency_ic_admin?.abbreviation ?? ''}`.trimEnd(),
+    url: `https://reporter.nih.gov/project-details/${p.appl_id}`,
+  }));
 }

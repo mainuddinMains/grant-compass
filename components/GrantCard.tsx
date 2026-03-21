@@ -8,6 +8,7 @@ interface GrantCardProps {
   startDate?: string;
   endDate?: string;
   pi?: string;
+  url?: string;
   matchScore?: number;
   reasoning?: string;
   keyAlignments?: string[];
@@ -24,6 +25,7 @@ export default function GrantCard({
   startDate,
   endDate,
   pi,
+  url,
   matchScore,
   reasoning,
   keyAlignments,
@@ -47,7 +49,18 @@ export default function GrantCard({
               #{rank}
             </span>
           )}
-          <h3 className="text-base font-semibold text-gray-900 leading-snug">{title}</h3>
+          {url ? (
+            <a
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-base font-semibold text-blue-700 hover:underline leading-snug"
+            >
+              {title}
+            </a>
+          ) : (
+            <h3 className="text-base font-semibold text-gray-900 leading-snug">{title}</h3>
+          )}
         </div>
         {matchScore != null && (
           <span className="flex-shrink-0 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-semibold text-green-700">

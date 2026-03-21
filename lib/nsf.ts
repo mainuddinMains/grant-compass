@@ -1,17 +1,21 @@
 import axios from 'axios';
 
-export interface NSFAward {
+export interface Grant {
+  title: string;
+  description: string;
+  deadline: string | null;
+  amount: number | null;
+  agency: string;
+  url: string;
+}
+
+interface NSFAward {
   id: string;
   title: string;
   abstractText: string;
-  agency: string;
-  fundsObligatedAmt: string;
-  date: string;
   expDate: string;
-  awardeeName: string;
-  piFirstName: string;
-  piLastName: string;
-  primaryProgram: string;
+  fundsObligatedAmt: string;
+  agency: string;
 }
 
 interface NSFResponse {
@@ -20,18 +24,24 @@ interface NSFResponse {
   };
 }
 
-export async function searchNSFGrants(query: string, limit = 10): Promise<NSFAward[]> {
+export async function fetchNSFGrants(keyword: string): Promise<Grant[]> {
   const response = await axios.get<NSFResponse>(
     'https://api.nsf.gov/services/v1/awards.json',
     {
       params: {
-        keyword: query,
-        rpp: limit,
-        offset: 0,
-        printFields:
-          'id,title,abstractText,agency,fundsObligatedAmt,date,expDate,awardeeName,piFirstName,piLastName,primaryProgram',
+        keyword,
+        dateStart: '01/01/2024',
+        printFields: 'id,title,abstractText,expDate,fundsObligatedAmt,agency',
       },
     }
   );
-  return response.data.response?.award || [];
+
+  return (response.data.response?.award ?? []).map((a) => ({
+    title: a.title ?? '',
+    description: a.abstractText ?? '',
+    deadline: a.expDate ?? null,
+    amount: a.fundsObligatedAmt ? Number(a.fundsObligatedAmt) : null,
+    agency: a.agency ?? 'NSF',
+    url: `https://www.nsf.gov/awardsearch/showAward?AWD_ID=${a.id}`,
+  }));
 }
