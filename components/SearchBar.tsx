@@ -1,5 +1,7 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
+
 interface SearchBarProps {
   value: string;
   onChange: (value: string) => void;
@@ -10,6 +12,16 @@ interface SearchBarProps {
 }
 
 export default function SearchBar({ value, onChange, onSearch, isLoading, readOnly, hideSubmit }: SearchBarProps) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Auto-resize: reset to auto then set to scrollHeight so it grows with content
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [value]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!value.trim() || readOnly) return;
@@ -17,7 +29,7 @@ export default function SearchBar({ value, onChange, onSearch, isLoading, readOn
   };
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4 w-full">
+    <form onSubmit={handleSubmit} className="flex flex-col gap-2 w-full">
       <div className={`flex items-start gap-3 rounded-xl border px-4 py-3 transition ${
         readOnly
           ? 'border-slate-200 bg-slate-50'
@@ -26,15 +38,16 @@ export default function SearchBar({ value, onChange, onSearch, isLoading, readOn
         {/* Left: compass logo */}
         <span className="flex-shrink-0 mt-0.5 text-xl select-none" aria-hidden="true">🧭</span>
 
-        {/* Textarea */}
+        {/* Auto-growing textarea */}
         <textarea
+          ref={textareaRef}
           value={value}
           onChange={readOnly ? undefined : (e) => onChange(e.target.value)}
           readOnly={readOnly}
           placeholder="Describe your research in plain English..."
-          rows={3}
+          rows={1}
           disabled={isLoading && !readOnly}
-          className={`flex-1 text-sm leading-relaxed focus:outline-none resize-none bg-transparent ${
+          className={`flex-1 text-sm leading-relaxed focus:outline-none resize-none overflow-hidden bg-transparent min-h-[1.5rem] ${
             readOnly
               ? 'text-slate-600 cursor-default'
               : 'text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 disabled:text-slate-400'
@@ -65,7 +78,7 @@ export default function SearchBar({ value, onChange, onSearch, isLoading, readOn
 
       {/* Submit hint */}
       {!hideSubmit && !readOnly && (
-        <p className="text-xs text-slate-400 dark:text-slate-500 text-right -mt-2">
+        <p className="text-xs text-slate-400 dark:text-slate-500 text-right">
           Press Enter or click 🔍 to search
         </p>
       )}
