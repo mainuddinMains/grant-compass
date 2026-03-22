@@ -1,6 +1,8 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import SaveDeadlineButton from '@/components/SaveDeadlineButton';
+import type { SuccessPrediction } from '@/lib/types';
 
 export interface GrantProps {
   title: string;
@@ -22,6 +24,8 @@ interface GrantCardProps {
   compareDisabled?: boolean;
   onCompareToggle?: () => void;
   guestMode?: boolean;
+  prediction?: SuccessPrediction;
+  predictionLoading?: boolean;
 }
 
 function AgencyBadge({ agency }: { agency: string }) {
@@ -121,7 +125,60 @@ function DeadlineCountdown({ deadline }: { deadline: string }) {
   );
 }
 
-export default function GrantCard({ grant, rank, index, onGenerateLetter, compareSelected, compareDisabled, onCompareToggle, guestMode }: GrantCardProps) {
+function SuccessBadge({ prediction, loading }: { prediction?: SuccessPrediction; loading?: boolean }) {
+  if (loading) {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-400">
+        <svg className="animate-spin w-3 h-3" fill="none" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+        </svg>
+        Predicting…
+      </span>
+    );
+  }
+  if (!prediction) return null;
+
+  const s = Math.min(100, Math.max(0, prediction.successScore));
+  let badgeColor: string;
+  if (s >= 65) badgeColor = 'bg-emerald-100 text-emerald-700';
+  else if (s >= 40) badgeColor = 'bg-amber-100 text-amber-700';
+  else badgeColor = 'bg-red-100 text-red-700';
+
+  return (
+    <div className="relative group/pred">
+      <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold cursor-default ${badgeColor}`}>
+        🎯 {s}% success
+      </span>
+      {/* Tooltip */}
+      <div className="absolute bottom-full left-0 mb-2 hidden group-hover/pred:block z-20 pointer-events-none w-56">
+        <div className="rounded-xl bg-slate-800 text-white text-xs p-3 shadow-xl space-y-1.5">
+          <div className="flex justify-between">
+            <span className="text-slate-400">Competition</span>
+            <span className="font-semibold">{prediction.competitionLevel}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-slate-400">Effort vs Reward</span>
+            <span className="font-semibold">{prediction.effortVsReward}</span>
+          </div>
+          {prediction.winningFactors?.[0] && (
+            <p className="text-emerald-300 text-[11px] leading-snug pt-0.5">
+              ✓ {prediction.winningFactors[0]}
+            </p>
+          )}
+          {prediction.redFlags?.[0] && (
+            <p className="text-red-300 text-[11px] leading-snug">
+              ⚠ {prediction.redFlags[0]}
+            </p>
+          )}
+          <p className="text-slate-500 text-[10px] pt-0.5 border-t border-slate-700">AI prediction · click grant for full analysis</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function GrantCard({ grant, rank, index, onGenerateLetter, compareSelected, compareDisabled, onCompareToggle, guestMode, prediction, predictionLoading }: GrantCardProps) {
   const router = useRouter();
   const formattedAmount =
     grant.amount != null
@@ -176,8 +233,16 @@ export default function GrantCard({ grant, rank, index, onGenerateLetter, compar
         </div>
       </div>
 
-      {/* Score bar */}
-      <ScoreBar score={grant.score} />
+      {/* Score bar + success prediction badge */}
+      <div className="flex flex-col gap-2">
+        <ScoreBar score={grant.score} />
+        {(predictionLoading || prediction) && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-400">AI Prediction:</span>
+            <SuccessBadge prediction={prediction} loading={predictionLoading} />
+          </div>
+        )}
+      </div>
 
       {/* Claude's reason */}
       {grant.reason && (
@@ -208,8 +273,9 @@ export default function GrantCard({ grant, rank, index, onGenerateLetter, compar
         </p>
       )}
 
-      {/* Footer: Generate Letter + Compare */}
+      {/* Footer: Generate Letter + Save Deadline + Compare */}
       <div className="pt-1 border-t border-gray-100 flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
         <div className="relative group/letter">
           <button
             onClick={(e) => { e.stopPropagation(); if (!guestMode) onGenerateLetter?.(); }}
@@ -228,6 +294,17 @@ export default function GrantCard({ grant, rank, index, onGenerateLetter, compar
               </div>
             </div>
           )}
+        </div>
+
+        {!guestMode && grant.url && (
+          <SaveDeadlineButton
+            grantTitle={grant.title}
+            agency={grant.agency}
+            deadline={grant.deadline}
+            fundingAmount={grant.amount}
+            grantUrl={grant.url}
+          />
+        )}
         </div>
 
         {onCompareToggle != null && (

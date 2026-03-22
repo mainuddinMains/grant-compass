@@ -248,7 +248,10 @@ export default function LetterModal({
       });
       if (!res.ok) throw new Error(`API error ${res.status}`);
       const data = await res.json();
-      if (!cancelRef.current) setLetter(data.letter ?? '');
+      if (!cancelRef.current) {
+        setLetter(data.letter ?? '');
+        fetch('/api/letters/track', { method: 'POST' }).catch(() => {});
+      }
     } catch (err) {
       if (!cancelRef.current)
         setError(err instanceof Error ? err.message : 'Failed to generate letter.');

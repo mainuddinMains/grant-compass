@@ -4,9 +4,12 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import LetterModal from '@/components/LetterModal';
+import SaveDeadlineButton from '@/components/SaveDeadlineButton';
+import ChecklistCard from '@/components/ChecklistCard';
 import { loadProfile } from '@/components/ProfileForm';
 import type { ResearcherProfile } from '@/components/ProfileForm';
 import type { Grant } from '@/lib/nih';
+import type { SuccessPrediction } from '@/lib/types';
 
 export const RESULTS_KEY = 'grant_compass_results';
 export const SEARCH_KEY = 'grant_compass_search';
@@ -148,6 +151,8 @@ export default function GrantDetailPage() {
   const [eligibilityLoading, setEligibilityLoading] = useState(true);
   const [showLetter, setShowLetter] = useState(false);
   const [notFound, setNotFound] = useState(false);
+  const [prediction, setPrediction] = useState<SuccessPrediction | null>(null);
+  const [predictionLoading, setPredictionLoading] = useState(false);
 
   useEffect(() => {
     setProfile(loadProfile());
@@ -159,7 +164,25 @@ export default function GrantDetailPage() {
       if (!found) { setNotFound(true); return; }
 
       setResult(found);
-      setResearchDescription(localStorage.getItem(SEARCH_KEY) ?? '');
+      const desc = localStorage.getItem(SEARCH_KEY) ?? '';
+      setResearchDescription(desc);
+
+      // Fire success prediction if score > 40
+      if (found.score > 40 && desc) {
+        setPredictionLoading(true);
+        fetch('/api/predict', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            grant: { title: found.grant.title, agency: found.grant.agency, description: found.grant.description },
+            researchDescription: desc,
+          }),
+        })
+          .then((r) => r.json())
+          .then((data) => { if (data.prediction) setPrediction(data.prediction); })
+          .catch(() => { /* silently skip */ })
+          .finally(() => setPredictionLoading(false));
+      }
 
       fetch('/api/eligibility', {
         method: 'POST',
@@ -303,6 +326,14 @@ export default function GrantDetailPage() {
               </div>
             )}
 
+            {/* Application Checklist */}
+            <ChecklistCard
+              grantUrl={grant.url ?? grant.title}
+              grantTitle={grant.title}
+              grantAgency={grant.agency}
+              grantDescription={grant.description ?? ''}
+            />
+
             {/* Eligibility */}
             <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
               <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-4">
@@ -333,6 +364,115 @@ export default function GrantDetailPage() {
               </h3>
               <ScoreBar score={score} />
             </div>
+
+            {/* AI Success Prediction */}
+            {(predictionLoading || prediction) && (
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-4 flex items-center gap-1.5">
+                  🎯 AI Success Prediction
+                </h3>
+                {predictionLoading && !prediction ? (
+                  <div className="flex items-center gap-2.5 text-sm text-slate-400">
+                    <svg className="animate-spin h-4 w-4 text-indigo-400 flex-shrink-0" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                    </svg>
+                    Analyzing your chances…
+                  </div>
+                ) : prediction && (
+                  <div className="space-y-4">
+                    {/* Success score bar */}
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-slate-500">Success likelihood</span>
+                        <span className={`text-xl font-bold tabular-nums ${prediction.successScore >= 65 ? 'text-emerald-600' : prediction.successScore >= 40 ? 'text-amber-600' : 'text-red-600'}`}>
+                          {prediction.successScore}%
+                        </span>
+                      </div>
+                      <div className="h-2.5 w-full rounded-full bg-slate-100 overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all duration-700 ${prediction.successScore >= 65 ? 'bg-emerald-500' : prediction.successScore >= 40 ? 'bg-amber-400' : 'bg-red-400'}`}
+                          style={{ width: `${prediction.successScore}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Competition + Effort badges */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="rounded-xl bg-slate-50 border border-slate-100 p-3 text-center">
+                        <p className="text-[10px] text-slate-400 uppercase tracking-wide font-medium mb-1">Competition</p>
+                        <p className={`text-sm font-bold ${
+                          prediction.competitionLevel === 'Low' ? 'text-emerald-600' :
+                          prediction.competitionLevel === 'Medium' ? 'text-amber-600' :
+                          'text-red-600'
+                        }`}>{prediction.competitionLevel}</p>
+                      </div>
+                      <div className="rounded-xl bg-slate-50 border border-slate-100 p-3 text-center">
+                        <p className="text-[10px] text-slate-400 uppercase tracking-wide font-medium mb-1">Effort vs Reward</p>
+                        <p className={`text-sm font-bold ${
+                          prediction.effortVsReward === 'Excellent' ? 'text-emerald-600' :
+                          prediction.effortVsReward === 'Good' ? 'text-blue-600' :
+                          prediction.effortVsReward === 'Fair' ? 'text-amber-600' :
+                          'text-red-600'
+                        }`}>{prediction.effortVsReward}</p>
+                      </div>
+                    </div>
+
+                    {/* Effort score */}
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-slate-500">Application effort</span>
+                        <span className="text-xs font-semibold text-slate-600">{prediction.effortScore}/100</span>
+                      </div>
+                      <div className="h-1.5 w-full rounded-full bg-slate-100 overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-slate-400 transition-all duration-700"
+                          style={{ width: `${prediction.effortScore}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Winning factors */}
+                    {prediction.winningFactors?.length > 0 && (
+                      <div>
+                        <p className="text-xs font-semibold text-emerald-700 mb-1.5 flex items-center gap-1">
+                          <span>✓</span> Winning Factors
+                        </p>
+                        <ul className="space-y-1">
+                          {prediction.winningFactors.map((f, i) => (
+                            <li key={i} className="text-xs text-slate-600 leading-snug flex items-start gap-1.5">
+                              <span className="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-emerald-400" />
+                              {f}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* Red flags */}
+                    {prediction.redFlags?.length > 0 && (
+                      <div>
+                        <p className="text-xs font-semibold text-red-700 mb-1.5 flex items-center gap-1">
+                          <span>⚠</span> Watch Out For
+                        </p>
+                        <ul className="space-y-1">
+                          {prediction.redFlags.map((f, i) => (
+                            <li key={i} className="text-xs text-slate-600 leading-snug flex items-start gap-1.5">
+                              <span className="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-red-400" />
+                              {f}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    <p className="text-[10px] text-slate-400 pt-1 border-t border-slate-100">
+                      AI estimate based on your research profile. Results may vary.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Deadline */}
             {grant.deadline && <DeadlineCountdown deadline={grant.deadline} />}
@@ -372,6 +512,17 @@ export default function GrantDetailPage() {
                 </svg>
                 Generate Letter of Intent
               </button>
+
+              {grant.url && (
+                <SaveDeadlineButton
+                  grantTitle={grant.title}
+                  agency={grant.agency}
+                  deadline={grant.deadline}
+                  fundingAmount={grant.amount}
+                  grantUrl={grant.url}
+                  large
+                />
+              )}
             </div>
 
           </aside>

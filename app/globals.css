@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* ── Class-based dark mode for Tailwind v4 ─────────────────── */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
@@ -11,16 +14,15 @@ body {
   color: #0f172a;
 }
 
+.dark body {
+  background-color: #0f172a;
+  color: #f1f5f9;
+}
+
 /* ── Fade-in animation ─────────────────────────────────────── */
 @keyframes fade-in-up {
-  from {
-    opacity: 0;
-    transform: translateY(12px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0);    }
 }
 
 .animate-fade-in-up {
@@ -33,3 +35,57 @@ body {
 .animation-delay-225 { animation-delay: 225ms; }
 .animation-delay-300 { animation-delay: 300ms; }
 .animation-delay-375 { animation-delay: 375ms; }
+
+/* ── Landing page animations ───────────────────────────────── */
+@keyframes float {
+  0%, 100% { transform: translateY(0px) rotate(0deg);   }
+  33%       { transform: translateY(-14px) rotate(1deg); }
+  66%       { transform: translateY(-6px) rotate(-1deg); }
+}
+
+@keyframes float-slow {
+  0%, 100% { transform: translateY(0px);   }
+  50%       { transform: translateY(-20px); }
+}
+
+@keyframes glow-pulse {
+  0%, 100% { opacity: 0.06; transform: scale(1);    }
+  50%       { opacity: 0.14; transform: scale(1.05); }
+}
+
+@keyframes gradient-x {
+  0%, 100% { background-size: 200% 200%; background-position: left center;  }
+  50%       { background-size: 200% 200%; background-position: right center; }
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(32px); }
+  to   { opacity: 1; transform: translateY(0);    }
+}
+
+@keyframes slide-up-sm {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0);    }
+}
+
+@keyframes spin-slow {
+  from { transform: rotate(0deg);   }
+  to   { transform: rotate(360deg); }
+}
+
+.animate-float       { animation: float 6s ease-in-out infinite; }
+.animate-float-slow  { animation: float-slow 8s ease-in-out infinite; }
+.animate-glow-pulse  { animation: glow-pulse 4s ease-in-out infinite; }
+.animate-gradient-x  { animation: gradient-x 5s ease infinite; }
+.animate-spin-slow   { animation: spin-slow 20s linear infinite; }
+
+.animate-slide-up    { animation: slide-up    0.7s ease-out both; }
+.animate-slide-up-sm { animation: slide-up-sm 0.5s ease-out both; }
+
+.animation-delay-100 { animation-delay: 100ms; }
+.animation-delay-200 { animation-delay: 200ms; }
+.animation-delay-400 { animation-delay: 400ms; }
+.animation-delay-500 { animation-delay: 500ms; }
+.animation-delay-600 { animation-delay: 600ms; }
+.animation-delay-700 { animation-delay: 700ms; }
+.animation-delay-800 { animation-delay: 800ms; }

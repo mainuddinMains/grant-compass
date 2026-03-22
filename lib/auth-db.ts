@@ -1,10 +1,41 @@
 import fs from 'fs/promises';
 import path from 'path';
 
+export interface ResearchAnalysis {
+  fundabilityScore: number;
+  topStrengths: string[];
+  recommendedGrantTypes: string[];
+  profileGaps: string[];
+  searchSuggestions: string[];
+}
+
 export interface UserProfile {
   university?: string;
   department?: string;
   position?: string;
+  researchAnalysis?: ResearchAnalysis;
+}
+
+export interface ChecklistItem {
+  id: string;
+  category: string;
+  task: string;
+  description: string;
+  estimatedHours: number;
+}
+
+export interface ChecklistState {
+  items: ChecklistItem[];
+  checked: Record<string, boolean>; // item id → true/false
+}
+
+export interface SavedDeadline {
+  grantTitle: string;
+  agency: string;
+  deadline: string | null;
+  fundingAmount: number | null;
+  grantUrl: string;
+  savedAt: number;
 }
 
 export interface StoredUser {
@@ -12,8 +43,14 @@ export interface StoredUser {
   name: string;
   email: string;
   passwordHash: string;
+  provider?: string;  // 'credentials' | 'google'
+  image?: string;     // profile picture URL (Google OAuth)
   createdAt: number;
   profile?: UserProfile;
+  lettersGenerated?: number;
+  savedDeadlines?: SavedDeadline[];
+  // key = grantUrl, value = checklist state for that grant
+  checklistProgress?: Record<string, ChecklistState>;
 }
 
 export interface StoredSearch {

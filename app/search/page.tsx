@@ -8,11 +8,14 @@ import SearchBar from '@/components/SearchBar';
 import GrantCard from '@/components/GrantCard';
 import LetterModal from '@/components/LetterModal';
 import NavUserMenu from '@/components/NavUserMenu';
+import GuestLanding from '@/components/GuestLanding';
+import ThemeToggle from '@/components/ThemeToggle';
 import type { ResearcherProfile } from '@/components/ProfileForm';
 import { sampleGrants } from '@/lib/sampleGrants';
 import { RESULTS_KEY, SEARCH_KEY } from '@/app/grants/[id]/page';
 import type { Grant } from '@/lib/nih';
 import type { GrantProps } from '@/components/GrantCard';
+import type { SuccessPrediction } from '@/lib/types';
 
 const HISTORY_KEY = 'grant_compass_history';
 const COMPARE_KEY = 'grant_compass_compare';
@@ -60,8 +63,19 @@ function SearchPageInner() {
   const [history, setHistory] = useState<SearchHistoryEntry[]>([]);
   const [compareIndices, setCompareIndices] = useState<number[]>([]);
   const [isDemo, setIsDemo] = useState(false);
+  const [predictions, setPredictions] = useState<Record<number, SuccessPrediction>>({});
+  const [predictingIndices, setPredictingIndices] = useState<Set<number>>(new Set());
   const { data: session, status } = useSession();
   const isGuest = status === 'unauthenticated';
+  const hasDemo = searchParams.get('demo') === 'true';
+  const hasQuery = !!searchParams.get('q');
+
+  // Redirect authenticated users with no params to dashboard
+  useEffect(() => {
+    if (status === 'authenticated' && !hasQuery && !hasDemo) {
+      router.replace('/dashboard');
+    }
+  }, [status, hasQuery, hasDemo, router]);
 
   // Load history from localStorage on mount
   useEffect(() => {
@@ -130,6 +144,43 @@ function SearchPageInner() {
       const finalResults = isLimited ? all.slice(0, 3) : aboveThreshold;
       setLimitedMatches(isLimited);
       setMatchResults(finalResults);
+      setPredictions({});
+      setPredictingIndices(new Set());
+
+      // Fire success predictions for top 3 grants with score > 40 (non-blocking)
+      const top3 = finalResults
+        .map((r, i) => ({ r, i }))
+        .filter(({ r }) => r.score > 40)
+        .slice(0, 3);
+
+      if (top3.length > 0) {
+        setPredictingIndices(new Set(top3.map(({ i }) => i)));
+        top3.forEach(({ r, i }) => {
+          void (async () => {
+            try {
+              const predRes = await fetch('/api/predict', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  grant: { title: r.grant.title, agency: r.grant.agency, description: r.grant.description },
+                  researchDescription: desc,
+                }),
+              });
+              if (predRes.ok) {
+                const predData = await predRes.json();
+                if (predData.prediction) {
+                  setPredictions((prev) => ({ ...prev, [i]: predData.prediction }));
+                }
+              }
+            } catch { /* silently skip */ }
+            setPredictingIndices((prev) => {
+              const next = new Set(prev);
+              next.delete(i);
+              return next;
+            });
+          })();
+        });
+      }
 
       // Persist results and description for the detail page
       try {
@@ -196,6 +247,8 @@ function SearchPageInner() {
     setLimitedMatches(false);
     setSuggestions([]);
     setCompareIndices([]);
+    setPredictions({});
+    setPredictingIndices(new Set());
     try {
       localStorage.setItem(RESULTS_KEY, JSON.stringify(entry.results));
       localStorage.setItem(SEARCH_KEY, entry.description);
@@ -260,18 +313,31 @@ function SearchPageInner() {
     router.replace('/search');
   };
 
-  // Auto-trigger demo when ?demo=true is in the URL
+  // Auto-trigger demo or pre-filled query from URL params
   useEffect(() => {
     if (searchParams.get('demo') === 'true') {
       handleDemo();
+    } else {
+      const q = searchParams.get('q');
+      if (q) {
+        const decoded = decodeURIComponent(q);
+        setDescription(decoded);
+        handleSearch(decoded);
+        router.replace('/search');
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Show guest landing for unauthenticated users with no demo/query
+  if (status === 'unauthenticated' && !hasDemo && !hasQuery) {
+    return <GuestLanding />;
+  }
+
   const isLoading = isSearching || isMatching;
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50">
+    <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-900">
 
       {/* ── Dark navy header ─────────────────────────────────── */}
       <header className="bg-[#0f172a] text-white shadow-lg">
@@ -295,8 +361,12 @@ function SearchPageInner() {
               </div>
             </div>
 
-            <div className="flex-shrink-0">
-              <NavUserMenu onProfileChange={setProfile} />
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <ThemeToggle />
+              <NavUserMenu
+                onProfileChange={setProfile}
+                onSuggestionClick={(s) => { setDescription(s); handleSearch(s); }}
+              />
             </div>
           </div>
         </div>
@@ -307,7 +377,7 @@ function SearchPageInner() {
         <div className="mx-auto max-w-3xl px-4 sm:px-6 py-8 sm:py-12 flex flex-col gap-8">
 
           {/* Search card */}
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm">
+          <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-5 sm:p-6 shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <p className="text-xs text-slate-400">
                 {isGuest ? 'Try the demo, or sign in to search' : 'Describe your research or try the demo'}
@@ -412,9 +482,9 @@ function SearchPageInner() {
 
           {/* Recent Searches */}
           {history.length > 0 && (
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 shadow-sm">
+            <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4 sm:p-5 shadow-sm">
               <div className="flex items-center justify-between mb-3">
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Recent Searches</p>
+                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Recent Searches</p>
                 <button
                   onClick={handleClearHistory}
                   className="text-xs text-slate-400 hover:text-red-500 transition-colors"
@@ -428,14 +498,14 @@ function SearchPageInner() {
                     <button
                       onClick={() => handleRestoreHistory(entry)}
                       disabled={isLoading}
-                      className="flex-1 flex items-center justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50 px-3.5 py-2.5 text-left hover:bg-indigo-50 hover:border-indigo-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      className="flex-1 flex items-center justify-between gap-3 rounded-xl border border-slate-100 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 px-3.5 py-2.5 text-left hover:bg-indigo-50 dark:hover:bg-indigo-900/20 hover:border-indigo-200 dark:hover:border-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                     >
-                      <span className="text-xs text-slate-700 font-medium truncate max-w-xs">
+                      <span className="text-xs text-slate-700 dark:text-slate-200 font-medium truncate max-w-xs">
                         {entry.description.length > 60
                           ? entry.description.slice(0, 60) + '…'
                           : entry.description}
                       </span>
-                      <span className="flex-shrink-0 flex items-center gap-2 text-xs text-slate-400">
+                      <span className="flex-shrink-0 flex items-center gap-2 text-xs text-slate-400 dark:text-slate-500">
                         <span>{entry.grantCount} grant{entry.grantCount !== 1 ? 's' : ''}</span>
                         <span>·</span>
                         <span>{relativeTime(entry.timestamp)}</span>
@@ -575,6 +645,8 @@ function SearchPageInner() {
                       compareDisabled={compareIndices.length >= 2}
                       onCompareToggle={() => handleCompareToggle(i)}
                       guestMode={isGuest && isDemo}
+                      prediction={predictions[i]}
+                      predictionLoading={predictingIndices.has(i)}
                     />
                   </div>
                 );
