@@ -104,7 +104,7 @@ export default function HistoryPage() {
     <div className="min-h-screen flex flex-col bg-slate-50">
       {/* Header */}
       <header className="bg-[#0f172a] text-white shadow-lg">
-        <div className="mx-auto max-w-3xl px-4 sm:px-6 py-5">
+        <div className="mx-auto max-w-screen-2xl px-4 sm:px-8 lg:px-12 py-5">
           <div className="flex items-center gap-4">
             <Link href="/search" className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-white transition-colors">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -126,7 +126,7 @@ export default function HistoryPage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-3xl w-full px-4 sm:px-6 py-8 flex flex-col gap-6">
+      <main className="mx-auto max-w-4xl w-full px-4 sm:px-8 py-8 flex flex-col gap-6">
 
         {error && (
           <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>

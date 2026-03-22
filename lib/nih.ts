@@ -9,59 +9,52 @@ export interface Grant {
   url: string;
 }
 
-interface GrantsGovHit {
-  id: number;
-  number: string;
-  title: string;
-  agency: string;       // actual field name in API response
-  agencyCode: string;
-  openDate: string;
-  closeDate: string;
-  oppStatus: string;
-  docType: string;
-  // synopsis is not returned in search results
+interface NIHReporterProject {
+  project_num: string;
+  project_title: string;
+  abstract_text: string;
+  award_amount: number | null;
+  project_end_date: string | null;
+  organization: { org_name: string } | null;
+  agency_ic_admin: { abbreviation: string } | null;
 }
 
-interface GrantsGovResponse {
-  data: {
-    oppHits: GrantsGovHit[];
-    hitCount: number;
-  };
-}
-
-// NIH and HHS agency code prefixes used on Grants.gov
-const NIH_AGENCY_PREFIXES = ['NIH', 'HHS', 'DHHS', 'NCI', 'NHLBI', 'NIAID', 'NIMH', 'NIEHS', 'NINDS', 'NIA'];
-
-function parseGrantsGovDate(dateStr: string | null): string | null {
-  if (!dateStr) return null;
-  // Grants.gov returns MM/DD/YYYY
-  const parts = dateStr.split('/');
-  if (parts.length === 3) return `${parts[2]}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`;
-  return dateStr;
+interface NIHReporterResponse {
+  results: NIHReporterProject[];
 }
 
 export async function fetchNIHGrants(keyword: string): Promise<Grant[]> {
-  const response = await axios.post<GrantsGovResponse>(
-    'https://api.grants.gov/v1/api/search2',
-    { keyword, oppStatuses: 'posted' },
+  const response = await axios.post<NIHReporterResponse>(
+    'https://api.reporter.nih.gov/v2/projects/search',
+    {
+      criteria: {
+        advanced_text_search: {
+          operator: 'and',
+          search_field: 'terms',
+          search_text: keyword,
+        },
+      },
+      limit: 50,
+      offset: 0,
+      sort_field: 'award_amount',
+      sort_order: 'desc',
+    },
     { headers: { 'Content-Type': 'application/json' } }
   );
 
-  const hits: GrantsGovHit[] = response.data?.data?.oppHits ?? [];
+  const projects: NIHReporterProject[] = response.data?.results ?? [];
 
-  // Filter to NIH / HHS opportunities only
-  return hits
-    .filter((h) => {
-      const code = (h.agencyCode ?? '').toUpperCase();
-      const name = (h.agency ?? '').toUpperCase();
-      return NIH_AGENCY_PREFIXES.some((p) => code.startsWith(p) || name.includes(p));
-    })
-    .map((h) => ({
-      title: h.title ?? '',
-      description: '',   // synopsis not available in search results
-      deadline: parseGrantsGovDate(h.closeDate),
-      amount: null,
-      agency: h.agency ?? 'NIH',
-      url: `https://www.grants.gov/search-results-detail/${h.id}`,
-    }));
+  return projects
+    .filter((p) => p.project_title?.trim())
+    .map((p) => {
+      const agency = p.agency_ic_admin?.abbreviation ?? p.organization?.org_name ?? 'NIH';
+      return {
+        title: p.project_title.trim(),
+        description: p.abstract_text ?? '',
+        deadline: p.project_end_date ?? null,
+        amount: p.award_amount && p.award_amount > 0 ? p.award_amount : null,
+        agency: `NIH – ${agency}`,
+        url: `https://reporter.nih.gov/search/${encodeURIComponent(p.project_num)}`,
+      };
+    });
 }
