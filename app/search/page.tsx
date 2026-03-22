@@ -2,16 +2,33 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 import SearchBar from '@/components/SearchBar';
 import GrantCard from '@/components/GrantCard';
 import LetterModal from '@/components/LetterModal';
-import ProfileForm, { loadProfile } from '@/components/ProfileForm';
+import NavUserMenu from '@/components/NavUserMenu';
+import GuestLanding from '@/components/GuestLanding';
+import ThemeToggle from '@/components/ThemeToggle';
 import type { ResearcherProfile } from '@/components/ProfileForm';
 import { sampleGrants } from '@/lib/sampleGrants';
 import { RESULTS_KEY, SEARCH_KEY } from '@/app/grants/[id]/page';
 import type { Grant } from '@/lib/nih';
 import type { GrantProps } from '@/components/GrantCard';
+import type { SuccessPrediction } from '@/lib/types';
+
+const HISTORY_KEY = 'grant_compass_history';
+const COMPARE_KEY = 'grant_compass_compare';
+const MAX_HISTORY = 5;
+
+interface SearchHistoryEntry {
+  id: string;
+  description: string;
+  timestamp: number;
+  grantCount: number;
+  topScore: number;
+  results: MatchResult[];
+}
 
 const DEMO_DESCRIPTION =
   'I study the effects of microplastics on neurological development in adolescents, ' +
@@ -42,9 +59,34 @@ function SearchPageInner() {
   const [limitedMatches, setLimitedMatches] = useState(false);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [isSuggesting, setIsSuggesting] = useState(false);
-  const [profile, setProfile] = useState<ResearcherProfile | null>(() => loadProfile());
+  const [profile, setProfile] = useState<ResearcherProfile | null>(null);
+  const [history, setHistory] = useState<SearchHistoryEntry[]>([]);
+  const [compareIndices, setCompareIndices] = useState<number[]>([]);
+  const [isDemo, setIsDemo] = useState(false);
+  const [predictions, setPredictions] = useState<Record<number, SuccessPrediction>>({});
+  const [predictingIndices, setPredictingIndices] = useState<Set<number>>(new Set());
+  const { data: session, status } = useSession();
+  const isGuest = status === 'unauthenticated';
+  const hasDemo = searchParams.get('demo') === 'true';
+  const hasQuery = !!searchParams.get('q');
 
-  const handleSearch = async (desc: string) => {
+  // Redirect authenticated users with no params to dashboard
+  useEffect(() => {
+    if (status === 'authenticated' && !hasQuery && !hasDemo) {
+      router.replace('/dashboard');
+    }
+  }, [status, hasQuery, hasDemo, router]);
+
+  // Load history from localStorage on mount
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(HISTORY_KEY);
+      if (stored) setHistory(JSON.parse(stored));
+    } catch { /* ignore */ }
+  }, []);
+
+  const handleSearch = async (desc: string, demo = false) => {
+    setIsDemo(demo);
     setResearchDescription(desc);
     setIsSearching(true);
     setMatchResults([]);
@@ -102,6 +144,43 @@ function SearchPageInner() {
       const finalResults = isLimited ? all.slice(0, 3) : aboveThreshold;
       setLimitedMatches(isLimited);
       setMatchResults(finalResults);
+      setPredictions({});
+      setPredictingIndices(new Set());
+
+      // Fire success predictions for top 3 grants with score > 40 (non-blocking)
+      const top3 = finalResults
+        .map((r, i) => ({ r, i }))
+        .filter(({ r }) => r.score > 40)
+        .slice(0, 3);
+
+      if (top3.length > 0) {
+        setPredictingIndices(new Set(top3.map(({ i }) => i)));
+        top3.forEach(({ r, i }) => {
+          void (async () => {
+            try {
+              const predRes = await fetch('/api/predict', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  grant: { title: r.grant.title, agency: r.grant.agency, description: r.grant.description },
+                  researchDescription: desc,
+                }),
+              });
+              if (predRes.ok) {
+                const predData = await predRes.json();
+                if (predData.prediction) {
+                  setPredictions((prev) => ({ ...prev, [i]: predData.prediction }));
+                }
+              }
+            } catch { /* silently skip */ }
+            setPredictingIndices((prev) => {
+              const next = new Set(prev);
+              next.delete(i);
+              return next;
+            });
+          })();
+        });
+      }
 
       // Persist results and description for the detail page
       try {
@@ -109,6 +188,40 @@ function SearchPageInner() {
         localStorage.setItem(SEARCH_KEY, desc);
       } catch {
         // localStorage unavailable — detail page will show "not found"
+      }
+
+      // Save to search history
+      try {
+        const topScore = finalResults.length > 0 ? Math.max(...finalResults.map((r) => r.score)) : 0;
+        const entry: SearchHistoryEntry = {
+          id: Date.now().toString(),
+          description: desc,
+          timestamp: Date.now(),
+          grantCount: finalResults.length,
+          topScore,
+          results: finalResults,
+        };
+        const stored = localStorage.getItem(HISTORY_KEY);
+        const prev: SearchHistoryEntry[] = stored ? JSON.parse(stored) : [];
+        // Remove duplicate description (keep latest)
+        const deduped = prev.filter((e) => e.description !== desc);
+        const next = [entry, ...deduped].slice(0, MAX_HISTORY);
+        localStorage.setItem(HISTORY_KEY, JSON.stringify(next));
+        setHistory(next);
+      } catch { /* ignore */ }
+
+      // If logged in, also save to server-side history
+      if (session?.user?.id) {
+        fetch('/api/history', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            searchDescription: desc,
+            grantsFound: finalResults.length,
+            topMatchScore: finalResults.length > 0 ? Math.max(...finalResults.map((r) => r.score)) : 0,
+            fullResults: finalResults,
+          }),
+        }).catch(() => {});
       }
 
       if (suggestRes?.ok) {
@@ -125,25 +238,106 @@ function SearchPageInner() {
     }
   };
 
+  const handleRestoreHistory = (entry: SearchHistoryEntry) => {
+    setDescription(entry.description);
+    setResearchDescription(entry.description);
+    setMatchResults(entry.results);
+    setHasSearched(true);
+    setError(null);
+    setLimitedMatches(false);
+    setSuggestions([]);
+    setCompareIndices([]);
+    setPredictions({});
+    setPredictingIndices(new Set());
+    try {
+      localStorage.setItem(RESULTS_KEY, JSON.stringify(entry.results));
+      localStorage.setItem(SEARCH_KEY, entry.description);
+    } catch { /* ignore */ }
+  };
+
+  const handleDeleteHistory = (id: string) => {
+    const next = history.filter((e) => e.id !== id);
+    setHistory(next);
+    try { localStorage.setItem(HISTORY_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+  };
+
+  const handleClearHistory = () => {
+    setHistory([]);
+    try { localStorage.removeItem(HISTORY_KEY); } catch { /* ignore */ }
+  };
+
+  const handleCompareToggle = (index: number) => {
+    setCompareIndices((prev) => {
+      if (prev.includes(index)) return prev.filter((i) => i !== index);
+      if (prev.length >= 2) return prev;
+      return [...prev, index];
+    });
+  };
+
+  const handleCompare = () => {
+    if (compareIndices.length !== 2) return;
+    const [a, b] = compareIndices;
+    const g1 = matchResults[a];
+    const g2 = matchResults[b];
+    const compareData = {
+      grant1: {
+        title: g1.grant.title,
+        agency: g1.grant.agency,
+        score: g1.score,
+        reason: g1.reason,
+        amount: g1.grant.amount,
+        deadline: g1.grant.deadline,
+        description: g1.grant.description,
+        url: g1.grant.url,
+      },
+      grant2: {
+        title: g2.grant.title,
+        agency: g2.grant.agency,
+        score: g2.score,
+        reason: g2.reason,
+        amount: g2.grant.amount,
+        deadline: g2.grant.deadline,
+        description: g2.grant.description,
+        url: g2.grant.url,
+      },
+      researchDescription,
+    };
+    try { localStorage.setItem(COMPARE_KEY, JSON.stringify(compareData)); } catch { /* ignore */ }
+    router.push('/compare');
+  };
+
   const handleDemo = () => {
     setDescription(DEMO_DESCRIPTION);
-    handleSearch(DEMO_DESCRIPTION);
+    handleSearch(DEMO_DESCRIPTION, true);
     // clear the query param so the URL stays clean
     router.replace('/search');
   };
 
-  // Auto-trigger demo when ?demo=true is in the URL
+  // Auto-trigger demo or pre-filled query from URL params
   useEffect(() => {
     if (searchParams.get('demo') === 'true') {
       handleDemo();
+    } else {
+      const q = searchParams.get('q');
+      if (q) {
+        const decoded = decodeURIComponent(q);
+        setDescription(decoded);
+        handleSearch(decoded);
+        router.replace('/search');
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Show guest landing for unauthenticated users with no demo/query
+  if (status === 'unauthenticated' && !hasDemo && !hasQuery) {
+    return <GuestLanding />;
+  }
+
   const isLoading = isSearching || isMatching;
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50">
+    <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-900">
 
       {/* ── Dark navy header ─────────────────────────────────── */}
       <header className="bg-[#0f172a] text-white shadow-lg">
@@ -167,11 +361,12 @@ function SearchPageInner() {
               </div>
             </div>
 
-            <div className="flex-shrink-0">
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-600 bg-slate-800 px-3 py-1 text-xs text-slate-300">
-                <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-                Powered by Claude AI
-              </span>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <ThemeToggle />
+              <NavUserMenu
+                onProfileChange={setProfile}
+                onSuggestionClick={(s) => { setDescription(s); handleSearch(s); }}
+              />
             </div>
           </div>
         </div>
@@ -181,14 +376,11 @@ function SearchPageInner() {
       <main className="flex-1">
         <div className="mx-auto max-w-3xl px-4 sm:px-6 py-8 sm:py-12 flex flex-col gap-8">
 
-          {/* Researcher profile */}
-          <ProfileForm initial={profile} onSave={setProfile} />
-
           {/* Search card */}
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm">
+          <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-5 sm:p-6 shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <p className="text-xs text-slate-400">
-                Describe your research or try the demo
+                {isGuest ? 'Try the demo, or sign in to search' : 'Describe your research or try the demo'}
               </p>
               <button
                 onClick={handleDemo}
@@ -202,47 +394,137 @@ function SearchPageInner() {
                 Try Demo
               </button>
             </div>
-            <SearchBar
-              value={description}
-              onChange={setDescription}
-              onSearch={handleSearch}
-              isLoading={isLoading}
-            />
 
-            {/* Refine suggestions */}
-            {(suggestions.length > 0 || isSuggesting) && (
-              <div className="mt-4 pt-4 border-t border-slate-100">
-                <p className="text-xs font-medium text-slate-400 mb-2.5">
-                  ✦ Refine your search
-                </p>
-                {isSuggesting && suggestions.length === 0 ? (
-                  <div className="flex items-center gap-2 text-xs text-slate-400">
-                    <svg className="animate-spin h-3.5 w-3.5 text-indigo-400" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-                    </svg>
-                    Generating suggestions…
+            {/* Guest + not in demo: locked overlay */}
+            {isGuest && !isDemo ? (
+              <div className="relative">
+                {/* Blurred faux search bar */}
+                <div className="blur-sm pointer-events-none select-none" aria-hidden="true">
+                  <div className="flex flex-col gap-4">
+                    <div className="w-full rounded-lg border border-gray-300 bg-gray-50 h-32" />
+                    <div className="flex justify-end">
+                      <div className="rounded-lg bg-blue-600 h-9 w-28 opacity-60" />
+                    </div>
                   </div>
-                ) : (
-                  <div className="flex flex-col gap-2">
-                    {suggestions.map((s, i) => (
-                      <button
-                        key={i}
-                        onClick={() => {
-                          setDescription(s);
-                          handleSearch(s);
-                        }}
-                        disabled={isLoading}
-                        className="text-left rounded-xl border border-indigo-100 bg-indigo-50 px-3.5 py-2.5 text-xs text-indigo-700 hover:bg-indigo-100 hover:border-indigo-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors leading-relaxed"
+                </div>
+                {/* Lock card overlay */}
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="rounded-2xl bg-white border border-slate-200 shadow-lg px-6 py-5 text-center flex flex-col items-center gap-3 max-w-xs w-full">
+                    <span className="text-3xl" aria-hidden="true">🔒</span>
+                    <div>
+                      <p className="text-sm font-bold text-slate-800">Sign in to start finding grants</p>
+                      <p className="mt-1 text-xs text-slate-500">Match your research to NIH and NSF funding</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <Link
+                        href="/login"
+                        className="rounded-lg border border-slate-200 px-4 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
                       >
-                        {s}
-                      </button>
-                    ))}
+                        Sign In
+                      </Link>
+                      <Link
+                        href="/signup"
+                        className="rounded-lg bg-indigo-600 hover:bg-indigo-500 px-4 py-1.5 text-xs font-semibold text-white transition-colors"
+                      >
+                        Sign Up
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <>
+                <SearchBar
+                  value={description}
+                  onChange={setDescription}
+                  onSearch={handleSearch}
+                  isLoading={isLoading}
+                  readOnly={isGuest && isDemo}
+                  hideSubmit={isGuest}
+                />
+
+                {/* Refine suggestions — signed-in only */}
+                {!isGuest && (suggestions.length > 0 || isSuggesting) && (
+                  <div className="mt-4 pt-4 border-t border-slate-100">
+                    <p className="text-xs font-medium text-slate-400 mb-2.5">
+                      ✦ Refine your search
+                    </p>
+                    {isSuggesting && suggestions.length === 0 ? (
+                      <div className="flex items-center gap-2 text-xs text-slate-400">
+                        <svg className="animate-spin h-3.5 w-3.5 text-indigo-400" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                        </svg>
+                        Generating suggestions…
+                      </div>
+                    ) : (
+                      <div className="flex flex-col gap-2">
+                        {suggestions.map((s, i) => (
+                          <button
+                            key={i}
+                            onClick={() => {
+                              setDescription(s);
+                              handleSearch(s);
+                            }}
+                            disabled={isLoading}
+                            className="text-left rounded-xl border border-indigo-100 bg-indigo-50 px-3.5 py-2.5 text-xs text-indigo-700 hover:bg-indigo-100 hover:border-indigo-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors leading-relaxed"
+                          >
+                            {s}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
-              </div>
+              </>
             )}
           </div>
+
+          {/* Recent Searches */}
+          {history.length > 0 && (
+            <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-4 sm:p-5 shadow-sm">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Recent Searches</p>
+                <button
+                  onClick={handleClearHistory}
+                  className="text-xs text-slate-400 hover:text-red-500 transition-colors"
+                >
+                  Clear all
+                </button>
+              </div>
+              <div className="flex flex-col gap-2">
+                {history.map((entry) => (
+                  <div key={entry.id} className="flex items-center gap-2 group">
+                    <button
+                      onClick={() => handleRestoreHistory(entry)}
+                      disabled={isLoading}
+                      className="flex-1 flex items-center justify-between gap-3 rounded-xl border border-slate-100 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 px-3.5 py-2.5 text-left hover:bg-indigo-50 dark:hover:bg-indigo-900/20 hover:border-indigo-200 dark:hover:border-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    >
+                      <span className="text-xs text-slate-700 dark:text-slate-200 font-medium truncate max-w-xs">
+                        {entry.description.length > 60
+                          ? entry.description.slice(0, 60) + '…'
+                          : entry.description}
+                      </span>
+                      <span className="flex-shrink-0 flex items-center gap-2 text-xs text-slate-400 dark:text-slate-500">
+                        <span>{entry.grantCount} grant{entry.grantCount !== 1 ? 's' : ''}</span>
+                        <span>·</span>
+                        <span>{relativeTime(entry.timestamp)}</span>
+                      </span>
+                    </button>
+                    <button
+                      onClick={() => handleDeleteHistory(entry.id)}
+                      className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full text-slate-300 hover:text-red-400 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all"
+                      title="Remove"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Status banners */}
           {isSearching && <StatusBanner message="Searching NIH Reporter and NSF APIs…" />}
@@ -291,6 +573,34 @@ function SearchPageInner() {
           {/* Results */}
           {matchResults.length > 0 && (
             <section className="flex flex-col gap-4">
+
+              {/* Demo banner for guests */}
+              {isGuest && isDemo && (
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-xl bg-indigo-50 border border-indigo-200 px-4 py-3">
+                  <div className="flex items-start gap-2 flex-1 min-w-0">
+                    <span className="text-base flex-shrink-0">👁️</span>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-indigo-900">You are viewing a demo.</p>
+                      <p className="text-xs text-indigo-700 mt-0.5">Sign in to search with your own research description.</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 flex-shrink-0">
+                    <Link
+                      href="/login"
+                      className="rounded-lg border border-indigo-300 bg-white px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-50 transition-colors"
+                    >
+                      Sign In
+                    </Link>
+                    <Link
+                      href="/signup"
+                      className="rounded-lg bg-indigo-600 hover:bg-indigo-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors"
+                    >
+                      Sign Up
+                    </Link>
+                  </div>
+                </div>
+              )}
+
               <div className="flex items-center justify-between">
                 <h2 className="text-base font-semibold text-slate-800">
                   Matched Grants
@@ -331,6 +641,12 @@ function SearchPageInner() {
                       index={i}
                       grant={grantProps}
                       onGenerateLetter={() => setActiveGrant(grantProps)}
+                      compareSelected={compareIndices.includes(i)}
+                      compareDisabled={compareIndices.length >= 2}
+                      onCompareToggle={() => handleCompareToggle(i)}
+                      guestMode={isGuest && isDemo}
+                      prediction={predictions[i]}
+                      predictionLoading={predictingIndices.has(i)}
                     />
                   </div>
                 );
@@ -341,6 +657,42 @@ function SearchPageInner() {
         </div>
       </main>
 
+
+      {/* Floating compare bar */}
+      {compareIndices.length > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 rounded-2xl bg-[#0f172a] text-white shadow-2xl px-5 py-3 border border-slate-700 animate-fade-in-up">
+          <div className="flex items-center gap-2">
+            {compareIndices.map((idx) => (
+              <span key={idx} className="inline-flex items-center gap-1 rounded-full bg-slate-700 px-2.5 py-1 text-xs font-medium">
+                <span className="w-1.5 h-1.5 rounded-full bg-violet-400" />
+                {matchResults[idx]?.grant.title.slice(0, 24)}…
+              </span>
+            ))}
+          </div>
+          {compareIndices.length === 1 ? (
+            <span className="text-xs text-slate-400">Select 1 more to compare</span>
+          ) : (
+            <button
+              onClick={handleCompare}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-violet-600 hover:bg-violet-500 px-4 py-1.5 text-xs font-semibold transition-colors"
+            >
+              Compare 2 grants
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+              </svg>
+            </button>
+          )}
+          <button
+            onClick={() => setCompareIndices([])}
+            className="ml-1 text-slate-400 hover:text-white transition-colors"
+            title="Clear comparison"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      )}
 
       {/* Letter modal */}
       {activeGrant && (
@@ -368,6 +720,19 @@ export default function SearchPage() {
       <SearchPageInner />
     </Suspense>
   );
+}
+
+/* ── Helpers ─────────────────────────────────────────────────── */
+
+function relativeTime(ts: number): string {
+  const diff = Date.now() - ts;
+  const mins = Math.floor(diff / 60_000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
 }
 
 /* ── Sub-components ──────────────────────────────────────────── */

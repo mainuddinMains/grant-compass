@@ -1,6 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useSession } from 'next-auth/react';
+import Link from 'next/link';
 import type { Grant } from '@/lib/nih';
 import type { ResearcherProfile } from '@/components/ProfileForm';
 
@@ -181,6 +183,10 @@ export default function LetterModal({
   const undoStack = useRef<string[]>([]);
   const redoStack = useRef<string[]>([]);
 
+  /* Auth */
+  const { data: session } = useSession();
+  const showProfileNudge = !!session?.user && !profile;
+
   /* Derived stats */
   const words = letter.trim() ? letter.trim().split(/\s+/).length : 0;
   const readingTime = Math.max(1, Math.ceil(words / 200));
@@ -242,7 +248,10 @@ export default function LetterModal({
       });
       if (!res.ok) throw new Error(`API error ${res.status}`);
       const data = await res.json();
-      if (!cancelRef.current) setLetter(data.letter ?? '');
+      if (!cancelRef.current) {
+        setLetter(data.letter ?? '');
+        fetch('/api/letters/track', { method: 'POST' }).catch(() => {});
+      }
     } catch (err) {
       if (!cancelRef.current)
         setError(err instanceof Error ? err.message : 'Failed to generate letter.');
@@ -628,6 +637,23 @@ body{font-family:Georgia,'Times New Roman',Times,serif;font-size:12pt;line-heigh
 
         {/* ══ BODY ════════════════════════════════════════════ */}
         <div className="flex-1 min-h-0 overflow-y-auto">
+
+          {/* Profile nudge for signed-in users without a profile */}
+          {showProfileNudge && !isLoading && (
+            <div className="mx-4 mt-3 flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5">
+              <p className="text-xs text-amber-800">
+                <span className="font-semibold">Your letter uses placeholder names.</span>{' '}
+                Complete your Researcher Profile for a personalized letter.
+              </p>
+              <Link
+                href="/search"
+                onClick={onClose}
+                className="flex-shrink-0 text-xs font-semibold text-amber-700 hover:text-amber-900 underline transition-colors whitespace-nowrap"
+              >
+                Complete profile →
+              </Link>
+            </div>
+          )}
 
           {/* Loading */}
           {isLoading && (
