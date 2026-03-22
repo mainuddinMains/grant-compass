@@ -2,12 +2,12 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { useSession, signOut } from 'next-auth/react';
+import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 import SearchBar from '@/components/SearchBar';
 import GrantCard from '@/components/GrantCard';
 import LetterModal from '@/components/LetterModal';
-import AuthResearcherProfile from '@/components/AuthResearcherProfile';
+import NavUserMenu from '@/components/NavUserMenu';
 import type { ResearcherProfile } from '@/components/ProfileForm';
 import { sampleGrants } from '@/lib/sampleGrants';
 import { RESULTS_KEY, SEARCH_KEY } from '@/app/grants/[id]/page';
@@ -295,44 +295,8 @@ function SearchPageInner() {
               </div>
             </div>
 
-            <div className="flex-shrink-0 flex items-center gap-2">
-              {session?.user ? (
-                <>
-                  <Link
-                    href="/history"
-                    className="inline-flex items-center gap-1.5 rounded-full border border-slate-600 bg-slate-800 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    History
-                  </Link>
-                  <span className="text-xs text-slate-400 hidden sm:inline">
-                    Hi, {session.user.name?.split(' ')[0]}
-                  </span>
-                  <button
-                    onClick={() => signOut({ callbackUrl: '/' })}
-                    className="rounded-full border border-slate-600 bg-slate-800 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
-                  >
-                    Sign Out
-                  </button>
-                </>
-              ) : (
-                <>
-                  <Link
-                    href="/login"
-                    className="rounded-full border border-slate-600 bg-slate-800 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
-                  >
-                    Sign In
-                  </Link>
-                  <Link
-                    href="/signup"
-                    className="rounded-full bg-indigo-600 hover:bg-indigo-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors"
-                  >
-                    Sign Up
-                  </Link>
-                </>
-              )}
+            <div className="flex-shrink-0">
+              <NavUserMenu onProfileChange={setProfile} />
             </div>
           </div>
         </div>
@@ -341,34 +305,6 @@ function SearchPageInner() {
       {/* ── Main content ─────────────────────────────────────── */}
       <main className="flex-1">
         <div className="mx-auto max-w-3xl px-4 sm:px-6 py-8 sm:py-12 flex flex-col gap-8">
-
-          {/* Researcher profile — signed-in users only */}
-          {session?.user ? (
-            <AuthResearcherProfile onProfileChange={setProfile} />
-          ) : (
-            <div className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <span className="flex-shrink-0 text-base">🔒</span>
-                <p className="text-sm text-slate-600 leading-snug">
-                  <span className="font-semibold text-slate-800">Sign in</span> to unlock your Researcher Profile and personalized Letter of Intent
-                </p>
-              </div>
-              <div className="flex-shrink-0 flex items-center gap-2">
-                <Link
-                  href="/login"
-                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-colors"
-                >
-                  Sign In
-                </Link>
-                <Link
-                  href="/signup"
-                  className="rounded-lg bg-indigo-600 hover:bg-indigo-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors"
-                >
-                  Sign Up
-                </Link>
-              </div>
-            </div>
-          )}
 
           {/* Search card */}
           <div className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm">

@@ -6,7 +6,7 @@ export interface ResearcherProfile {
   fullName: string;
   university: string;
   department: string;
-  position: 'Masters Student' | 'PhD Student' | 'Postdoc' | 'Professor' | '';
+  position: 'Masters Student' | 'PhD Student' | 'Postdoc' | 'Professor' | 'Researcher' | 'Other' | '';
 }
 
 const STORAGE_KEY = 'grant_compass_profile';
