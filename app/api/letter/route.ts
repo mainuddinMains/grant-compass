@@ -12,12 +12,20 @@ to a grant. Be specific, formal, and compelling. Structure it as:
 1. Opening paragraph: researcher background and research focus
 2. Middle paragraph: alignment between research and grant goals
 3. Closing paragraph: expected outcomes and impact
-Address it to the funding agency. Sign off as "Principal Investigator"`;
+Address it to the funding agency. Sign off with the researcher's actual name, position, and university if provided, otherwise sign as "Principal Investigator"`;
+
+interface ResearcherProfile {
+  fullName: string;
+  university: string;
+  department: string;
+  position: string;
+}
 
 export async function POST(req: NextRequest) {
-  const { researchDescription, grant } = await req.json() as {
+  const { researchDescription, grant, profile } = await req.json() as {
     researchDescription: string;
     grant: Grant;
+    profile?: ResearcherProfile;
   };
 
   if (!researchDescription?.trim()) {
@@ -27,7 +35,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'grant is required' }, { status: 400 });
   }
 
-  const userMessage = `Researcher description:
+  const profileSection = profile?.fullName
+    ? `Researcher profile:
+Name: ${profile.fullName}
+Position: ${profile.position}
+Department: ${profile.department}
+University: ${profile.university}
+
+`
+    : '';
+
+  const userMessage = `${profileSection}Researcher description:
 ${researchDescription}
 
 Grant details:

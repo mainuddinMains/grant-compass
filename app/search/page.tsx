@@ -6,7 +6,10 @@ import Link from 'next/link';
 import SearchBar from '@/components/SearchBar';
 import GrantCard from '@/components/GrantCard';
 import LetterModal from '@/components/LetterModal';
+import ProfileForm, { loadProfile } from '@/components/ProfileForm';
+import type { ResearcherProfile } from '@/components/ProfileForm';
 import { sampleGrants } from '@/lib/sampleGrants';
+import { RESULTS_KEY, SEARCH_KEY } from '@/app/grants/[id]/page';
 import type { Grant } from '@/lib/nih';
 import type { GrantProps } from '@/components/GrantCard';
 
@@ -39,6 +42,7 @@ function SearchPageInner() {
   const [limitedMatches, setLimitedMatches] = useState(false);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [isSuggesting, setIsSuggesting] = useState(false);
+  const [profile, setProfile] = useState<ResearcherProfile | null>(() => loadProfile());
 
   const handleSearch = async (desc: string) => {
     setResearchDescription(desc);
@@ -86,14 +90,26 @@ function SearchPageInner() {
         }).catch(() => null),
       ]);
 
-      if (!matchRes.ok) throw new Error(`Match API error: ${matchRes.status}`);
+      if (!matchRes.ok) {
+        const errBody = await matchRes.json().catch(() => ({}));
+        throw new Error(errBody.detail ?? errBody.error ?? `Match API error: ${matchRes.status}`);
+      }
 
       const matchData = await matchRes.json();
       const all: MatchResult[] = matchData.results ?? [];
       const aboveThreshold = all.filter((r) => r.score > 30);
       const isLimited = aboveThreshold.length < 3;
+      const finalResults = isLimited ? all.slice(0, 3) : aboveThreshold;
       setLimitedMatches(isLimited);
-      setMatchResults(isLimited ? all.slice(0, 3) : aboveThreshold);
+      setMatchResults(finalResults);
+
+      // Persist results and description for the detail page
+      try {
+        localStorage.setItem(RESULTS_KEY, JSON.stringify(finalResults));
+        localStorage.setItem(SEARCH_KEY, desc);
+      } catch {
+        // localStorage unavailable — detail page will show "not found"
+      }
 
       if (suggestRes?.ok) {
         const suggestData = await suggestRes.json();
@@ -164,6 +180,9 @@ function SearchPageInner() {
       {/* ── Main content ─────────────────────────────────────── */}
       <main className="flex-1">
         <div className="mx-auto max-w-3xl px-4 sm:px-6 py-8 sm:py-12 flex flex-col gap-8">
+
+          {/* Researcher profile */}
+          <ProfileForm initial={profile} onSave={setProfile} />
 
           {/* Search card */}
           <div className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm">
@@ -309,6 +328,7 @@ function SearchPageInner() {
                   >
                     <GrantCard
                       rank={i + 1}
+                      index={i}
                       grant={grantProps}
                       onGenerateLetter={() => setActiveGrant(grantProps)}
                     />
@@ -327,6 +347,7 @@ function SearchPageInner() {
         <LetterModal
           grant={activeGrant}
           researchDescription={researchDescription}
+          profile={profile}
           onClose={() => setActiveGrant(null)}
         />
       )}

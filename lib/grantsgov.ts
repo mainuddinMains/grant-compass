@@ -5,11 +5,13 @@ interface GrantsGovHit {
   id: number;
   number: string;
   title: string;
-  agencyName: string;
+  agency: string;       // actual field name in API response
+  agencyCode: string;
   openDate: string;
   closeDate: string;
-  synopsis: string;
-  awardCeiling: number | null;
+  oppStatus: string;
+  docType: string;
+  // synopsis is not returned in search results — only in detail endpoints
 }
 
 interface GrantsGovResponse {
@@ -19,8 +21,9 @@ interface GrantsGovResponse {
   };
 }
 
-function parseGrantsGovDate(dateStr: string | null): string | null {
+function parseGrantsGovDate(dateStr: string | null | undefined): string | null {
   if (!dateStr) return null;
+  // Grants.gov returns MM/DD/YYYY
   const parts = dateStr.split('/');
   if (parts.length === 3) return `${parts[2]}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`;
   return dateStr;
@@ -37,10 +40,10 @@ export async function fetchGrantsGovGrants(keyword: string): Promise<Grant[]> {
 
   return hits.map((h) => ({
     title: h.title ?? '',
-    description: h.synopsis ?? '',
+    description: '',   // synopsis not available in search results
     deadline: parseGrantsGovDate(h.closeDate),
-    amount: h.awardCeiling ?? null,
-    agency: h.agencyName ?? 'Grants.gov',
+    amount: null,
+    agency: h.agency ?? 'Federal',
     url: `https://www.grants.gov/search-results-detail/${h.id}`,
   }));
 }

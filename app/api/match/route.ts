@@ -20,61 +20,76 @@ interface MatchResult {
 }
 
 export async function POST(req: NextRequest) {
-  const { researchDescription, grants } = await req.json() as {
-    researchDescription: string;
-    grants: Grant[];
-  };
-
-  if (!researchDescription?.trim()) {
-    return NextResponse.json({ error: 'researchDescription is required' }, { status: 400 });
-  }
-  if (!Array.isArray(grants) || grants.length === 0) {
-    return NextResponse.json({ error: 'grants array is required' }, { status: 400 });
-  }
-
-  const grantsText = grants
-    .map((g, i) =>
-      `[${i}] title: ${g.title} | agency: ${g.agency} | description: ${g.description.slice(0, 300)}`
-    )
-    .join('\n');
-
-  const userMessage = `Researcher description:\n${researchDescription}\n\nGrants:\n${grantsText}`;
-
-  let response;
   try {
-    response = await client.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 2048,
-      system: SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: userMessage }],
-    });
+    const body = await req.json();
+    const researchDescription: string = body.researchDescription;
+    const grants: Grant[] = body.grants;
+
+    if (!researchDescription?.trim()) {
+      return NextResponse.json({ error: 'researchDescription is required' }, { status: 400 });
+    }
+    if (!Array.isArray(grants) || grants.length === 0) {
+      return NextResponse.json({ error: 'grants array is required' }, { status: 400 });
+    }
+
+    // Cap at 10 grants — each entry needs ~80 tokens of output, so 10 fits well within budget
+    const capped = grants.slice(0, 10);
+    console.log(`[/api/match] scoring ${capped.length} grants`);
+
+    const grantsText = capped
+      .map((g, i) =>
+        `[${i}] title: ${g.title ?? ''} | agency: ${g.agency ?? ''} | description: ${(g.description ?? '').slice(0, 150)}`
+      )
+      .join('\n');
+
+    const userMessage = `Researcher description:\n${researchDescription}\n\nGrants:\n${grantsText}`;
+
+    let response;
+    try {
+      response = await client.messages.create({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 2048,
+        system: SYSTEM_PROMPT,
+        messages: [{ role: 'user', content: userMessage }],
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error('[/api/match] Claude API error:', message);
+      return NextResponse.json({ error: 'Claude API error', detail: message }, { status: 502 });
+    }
+
+    const text = response.content
+      .filter((b) => b.type === 'text')
+      .map((b) => b.text)
+      .join('');
+
+    // Extract the JSON array from anywhere in the response
+    console.log('[/api/match] Claude raw response:', text.slice(0, 500));
+
+    const arrayMatch = text.match(/\[[\s\S]*\]/);
+    if (!arrayMatch) {
+      console.error('[/api/match] No JSON array found in response:', text);
+      return NextResponse.json({ error: 'Failed to parse Claude response', detail: `No JSON array in: ${text.slice(0, 200)}` }, { status: 502 });
+    }
+
+    let ranked: MatchResult[];
+    try {
+      ranked = JSON.parse(arrayMatch[0]);
+    } catch (parseErr) {
+      console.error('[/api/match] JSON parse failed:', parseErr, 'raw:', text);
+      return NextResponse.json({ error: 'Failed to parse Claude response', detail: `Parse error on: ${arrayMatch[0].slice(0, 200)}` }, { status: 502 });
+    }
+
+    const results = ranked.map((m) => ({
+      ...m,
+      grant: capped[m.grantId] ?? null,
+    }));
+
+    return NextResponse.json({ results });
+
   } catch (err) {
-    console.error('[/api/match] Claude API error:', err);
     const message = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: 'Claude API error', detail: message }, { status: 502 });
+    console.error('[/api/match] Unhandled error:', message);
+    return NextResponse.json({ error: 'Internal error', detail: message }, { status: 500 });
   }
-
-  const text = response.content
-    .filter((b) => b.type === 'text')
-    .map((b) => b.text)
-    .join('');
-
-  // Strip markdown code fences if the model wraps the JSON
-  const json = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
-
-  let ranked: MatchResult[];
-  try {
-    ranked = JSON.parse(json);
-  } catch {
-    console.error('[/api/match] JSON parse failed, raw response:', text);
-    return NextResponse.json({ error: 'Failed to parse Claude response', raw: text }, { status: 502 });
-  }
-
-  // Attach the full Grant object alongside each match result
-  const results = ranked.map((m) => ({
-    ...m,
-    grant: grants[m.grantId] ?? null,
-  }));
-
-  return NextResponse.json({ results });
 }
