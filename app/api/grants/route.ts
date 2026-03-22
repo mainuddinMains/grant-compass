@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { fetchNIHGrants } from '@/lib/nih';
 import { fetchNSFGrants } from '@/lib/nsf';
+import { fetchGrantsGovGrants } from '@/lib/grantsgov';
 import type { Grant } from '@/lib/nih';
 
 export const maxDuration = 60;
@@ -27,8 +28,9 @@ Query 3: 2-3 key mechanisms or methods used in the research`,
     .join('')
     .trim();
 
-  const json = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
-  const sets: string[] = JSON.parse(json);
+  const arrayMatch = text.match(/\[[\s\S]*\]/);
+  if (!arrayMatch) return [description];
+  const sets: string[] = JSON.parse(arrayMatch[0]);
   return sets.filter((s) => typeof s === 'string' && s.trim().length > 0);
 }
 
@@ -47,26 +49,39 @@ export async function GET(req: NextRequest) {
     console.error('[/api/grants] keyword extraction failed, using raw query:', err);
   }
 
-  // Make parallel NIH calls for each keyword set + one NSF call with the primary set
+  const primary = keywordSets[0];
+
+  // Parallel NIH calls per keyword set + NSF + Grants.gov with primary keywords
   const nihCalls = keywordSets.map((kw) =>
     fetchNIHGrants(kw).catch((err) => {
       console.error(`[/api/grants] NIH call failed for "${kw}":`, err);
       return [] as Grant[];
     })
   );
-  const nsfCall = fetchNSFGrants(keywordSets[0]).catch((err) => {
+
+  const nsfCall = fetchNSFGrants(primary).catch((err) => {
     console.error('[/api/grants] NSF call failed:', err);
     return [] as Grant[];
   });
 
-  const [nsfGrants, ...nihResults] = await Promise.all([nsfCall, ...nihCalls]);
+  const grantsGovCall = fetchGrantsGovGrants(primary).catch((err) => {
+    console.error('[/api/grants] Grants.gov call failed:', err);
+    return [] as Grant[];
+  });
+
+  const [nsfGrants, grantsGovGrants, ...nihResults] = await Promise.all([
+    nsfCall,
+    grantsGovCall,
+    ...nihCalls,
+  ]);
+
   const nihGrants = nihResults.flat();
 
   // Deduplicate by normalised title, and drop grants whose deadline has passed
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const seen = new Set<string>();
-  const combined = [...nihGrants, ...nsfGrants].filter((g) => {
+  const combined = [...nihGrants, ...grantsGovGrants, ...nsfGrants].filter((g) => {
     const key = g.title.toLowerCase().trim();
     if (seen.has(key)) return false;
     seen.add(key);

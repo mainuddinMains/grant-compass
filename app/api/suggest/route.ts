@@ -30,11 +30,14 @@ Return ONLY a JSON array of strings. No explanation.`,
     .join('')
     .trim();
 
-  const json = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+  const arrayMatch = text.match(/\[[\s\S]*\]/);
+  if (!arrayMatch) {
+    return NextResponse.json({ error: 'Failed to parse suggestions', raw: text }, { status: 502 });
+  }
 
   let suggestions: string[];
   try {
-    suggestions = JSON.parse(json);
+    suggestions = JSON.parse(arrayMatch[0]);
   } catch {
     return NextResponse.json({ error: 'Failed to parse suggestions', raw: text }, { status: 502 });
   }

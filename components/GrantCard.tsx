@@ -1,5 +1,7 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
+
 export interface GrantProps {
   title: string;
   agency: string;
@@ -14,6 +16,7 @@ export interface GrantProps {
 interface GrantCardProps {
   grant: GrantProps;
   rank?: number;
+  index?: number;
   onGenerateLetter?: () => void;
 }
 
@@ -77,7 +80,45 @@ function ScoreBar({ score }: { score: number }) {
   );
 }
 
-export default function GrantCard({ grant, rank, onGenerateLetter }: GrantCardProps) {
+function DeadlineCountdown({ deadline }: { deadline: string }) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const due = new Date(deadline);
+  due.setHours(0, 0, 0, 0);
+  const days = Math.round((due.getTime() - today.getTime()) / 86_400_000);
+
+  let textColor: string;
+  let bgColor: string;
+  let label: string;
+
+  if (days < 0) {
+    return null; // already filtered server-side, but just in case
+  } else if (days < 30) {
+    textColor = 'text-red-700';
+    bgColor = 'bg-red-50';
+    label = days === 0 ? 'Due today' : `${days} day${days === 1 ? '' : 's'} left`;
+  } else if (days <= 60) {
+    textColor = 'text-orange-700';
+    bgColor = 'bg-orange-50';
+    label = `${days} days left`;
+  } else {
+    textColor = 'text-green-700';
+    bgColor = 'bg-green-50';
+    label = `${days} days left`;
+  }
+
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${bgColor} ${textColor}`}>
+      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+      {label}
+    </span>
+  );
+}
+
+export default function GrantCard({ grant, rank, index, onGenerateLetter }: GrantCardProps) {
+  const router = useRouter();
   const formattedAmount =
     grant.amount != null
       ? new Intl.NumberFormat('en-US', {
@@ -89,8 +130,15 @@ export default function GrantCard({ grant, rank, onGenerateLetter }: GrantCardPr
         }).format(grant.amount)
       : null;
 
+  const handleCardClick = () => {
+    if (index != null) router.push(`/grants/${index}`);
+  };
+
   return (
-    <article className="group rounded-xl border border-gray-200 bg-white p-5 shadow-sm flex flex-col gap-4 hover:shadow-md hover:border-gray-300 transition-all duration-200">
+    <article
+      className={`group rounded-xl border border-gray-200 bg-white p-5 shadow-sm flex flex-col gap-4 hover:shadow-md hover:border-gray-300 transition-all duration-200 ${index != null ? 'cursor-pointer' : ''}`}
+      onClick={handleCardClick}
+    >
 
       {/* Header: rank + title + agency badge */}
       <div className="flex items-start gap-3">
@@ -111,6 +159,7 @@ export default function GrantCard({ grant, rank, onGenerateLetter }: GrantCardPr
               href={grant.url}
               target="_blank"
               rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
               className="text-base font-bold text-gray-900 leading-snug hover:text-blue-600 transition-colors line-clamp-2"
             >
               {grant.title}
@@ -144,14 +193,7 @@ export default function GrantCard({ grant, rank, onGenerateLetter }: GrantCardPr
               <span className="font-medium text-gray-700">{formattedAmount}</span>
             </span>
           )}
-          {grant.deadline && (
-            <span className="flex items-center gap-1">
-              <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-              <span>Deadline: <span className="font-medium text-gray-700">{grant.deadline}</span></span>
-            </span>
-          )}
+          {grant.deadline && <DeadlineCountdown deadline={grant.deadline} />}
         </div>
       )}
 
@@ -165,7 +207,7 @@ export default function GrantCard({ grant, rank, onGenerateLetter }: GrantCardPr
       {/* Footer: Generate Letter button */}
       <div className="pt-1 border-t border-gray-100">
         <button
-          onClick={onGenerateLetter}
+          onClick={(e) => { e.stopPropagation(); onGenerateLetter?.(); }}
           disabled={!onGenerateLetter}
           className="inline-flex items-center gap-1.5 rounded-lg bg-blue-50 border border-blue-200 px-4 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100 hover:border-blue-300 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
