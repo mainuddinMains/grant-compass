@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# User data (passwords hashed, but exclude from git)
+/data/users.json
+/data/searches.json

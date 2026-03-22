@@ -18,6 +18,10 @@ interface GrantCardProps {
   rank?: number;
   index?: number;
   onGenerateLetter?: () => void;
+  compareSelected?: boolean;
+  compareDisabled?: boolean;
+  onCompareToggle?: () => void;
+  guestMode?: boolean;
 }
 
 function AgencyBadge({ agency }: { agency: string }) {
@@ -117,7 +121,7 @@ function DeadlineCountdown({ deadline }: { deadline: string }) {
   );
 }
 
-export default function GrantCard({ grant, rank, index, onGenerateLetter }: GrantCardProps) {
+export default function GrantCard({ grant, rank, index, onGenerateLetter, compareSelected, compareDisabled, onCompareToggle, guestMode }: GrantCardProps) {
   const router = useRouter();
   const formattedAmount =
     grant.amount != null
@@ -204,18 +208,45 @@ export default function GrantCard({ grant, rank, index, onGenerateLetter }: Gran
         </p>
       )}
 
-      {/* Footer: Generate Letter button */}
-      <div className="pt-1 border-t border-gray-100">
-        <button
-          onClick={(e) => { e.stopPropagation(); onGenerateLetter?.(); }}
-          disabled={!onGenerateLetter}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-blue-50 border border-blue-200 px-4 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100 hover:border-blue-300 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-        >
-          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-          </svg>
-          Generate Letter of Intent
-        </button>
+      {/* Footer: Generate Letter + Compare */}
+      <div className="pt-1 border-t border-gray-100 flex items-center justify-between gap-2 flex-wrap">
+        <div className="relative group/letter">
+          <button
+            onClick={(e) => { e.stopPropagation(); if (!guestMode) onGenerateLetter?.(); }}
+            disabled={!onGenerateLetter || guestMode}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-blue-50 border border-blue-200 px-4 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100 hover:border-blue-300 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            Generate Letter of Intent
+          </button>
+          {guestMode && (
+            <div className="absolute bottom-full left-0 mb-2 hidden group-hover/letter:block z-10 pointer-events-none">
+              <div className="rounded-lg bg-slate-800 text-white text-xs px-3 py-1.5 whitespace-nowrap shadow-lg">
+                Sign in to generate your personalized letter
+              </div>
+            </div>
+          )}
+        </div>
+
+        {onCompareToggle != null && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onCompareToggle(); }}
+            disabled={compareDisabled && !compareSelected}
+            title={compareDisabled && !compareSelected ? 'Max 2 grants can be compared' : compareSelected ? 'Remove from comparison' : 'Add to comparison'}
+            className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+              compareSelected
+                ? 'bg-violet-600 border-violet-600 text-white hover:bg-violet-700'
+                : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300'
+            }`}
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
+            </svg>
+            {compareSelected ? 'Selected' : 'Compare'}
+          </button>
+        )}
       </div>
 
     </article>

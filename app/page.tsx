@@ -1,6 +1,11 @@
 import Link from 'next/link';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth-options';
+import NavAuth from '@/components/NavAuth';
 
-export default function LandingPage() {
+export default async function LandingPage() {
+  const session = await getServerSession(authOptions);
+
   return (
     <div className="min-h-screen flex flex-col bg-white">
 
@@ -11,12 +16,15 @@ export default function LandingPage() {
             <span className="text-xl" aria-hidden="true">🧭</span>
             <span className="text-lg font-bold tracking-tight">Grant Compass</span>
           </div>
-          <Link
-            href="/search"
-            className="rounded-full bg-indigo-600 hover:bg-indigo-500 px-4 py-1.5 text-sm font-semibold transition-colors"
-          >
-            Search Grants →
-          </Link>
+          <div className="flex items-center gap-2">
+            <NavAuth user={session?.user} />
+            <Link
+              href="/search"
+              className="rounded-full bg-indigo-600 hover:bg-indigo-500 px-4 py-1.5 text-sm font-semibold transition-colors"
+            >
+              Search Grants →
+            </Link>
+          </div>
         </div>
       </nav>
 
