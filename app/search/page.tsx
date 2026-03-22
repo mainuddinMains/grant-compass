@@ -70,12 +70,12 @@ function SearchPageInner() {
   const hasDemo = searchParams.get('demo') === 'true';
   const hasQuery = !!searchParams.get('q');
 
-  // Redirect authenticated users with no params to dashboard
+  // Always redirect authenticated users to the unified dashboard
   useEffect(() => {
-    if (status === 'authenticated' && !hasQuery && !hasDemo) {
+    if (status === 'authenticated') {
       router.replace('/dashboard');
     }
-  }, [status, hasQuery, hasDemo, router]);
+  }, [status, router]);
 
   // Load history from localStorage on mount
   useEffect(() => {
