@@ -33,6 +33,7 @@ export async function fetchNSFGrants(keyword: string): Promise<Grant[]> {
         dateStart: '01/01/2024',
         active: 'true',
         printFields: 'id,title,abstractText,expDate,fundsObligatedAmt,agency',
+        rpp: 25,
       },
     }
   );

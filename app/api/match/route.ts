@@ -32,8 +32,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'grants array is required' }, { status: 400 });
     }
 
-    // Cap at 10 grants — each entry needs ~80 tokens of output, so 10 fits well within budget
-    const capped = grants.slice(0, 10);
+    // Cap at 50 grants — each entry needs ~80 tokens of output
+    const capped = grants.slice(0, 50);
     console.log(`[/api/match] scoring ${capped.length} grants`);
 
     const grantsText = capped
@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
     try {
       response = await client.messages.create({
         model: 'claude-sonnet-4-6',
-        max_tokens: 2048,
+        max_tokens: 10000,
         system: SYSTEM_PROMPT,
         messages: [{ role: 'user', content: userMessage }],
       });

@@ -264,8 +264,6 @@ export default function GuestLanding() {
           <div className="flex items-center gap-2 text-sm text-slate-500">
             <span aria-hidden="true">🧭</span>
             <span className="font-semibold text-slate-700">Grant Compass</span>
-            <span>·</span>
-            <span>Powered by NIH Reporter, NSF Awards API & Claude AI</span>
           </div>
           <div className="flex items-center gap-4 text-xs text-slate-400">
             <Link href="/login" className="hover:text-slate-600 transition-colors">Sign In</Link>

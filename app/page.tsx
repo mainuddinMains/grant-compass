@@ -147,12 +147,6 @@ export default async function LandingPage() {
 
         <div className="relative mx-auto max-w-4xl px-4 sm:px-6 py-24 sm:py-36 text-center">
 
-          {/* Badge */}
-          <div className="animate-slide-up inline-flex items-center gap-2 rounded-full border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-900/40 px-4 py-1.5 text-xs font-semibold text-indigo-600 dark:text-indigo-300 mb-8">
-            <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
-            Powered by NIH Reporter · NSF Awards API · Claude AI
-          </div>
-
           {/* Headline */}
           <h1 className="animate-slide-up animation-delay-100 text-5xl sm:text-7xl font-extrabold tracking-tight leading-[1.05] text-slate-900 dark:text-white">
             Find the perfect grant{' '}

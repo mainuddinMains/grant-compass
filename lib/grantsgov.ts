@@ -32,7 +32,7 @@ function parseGrantsGovDate(dateStr: string | null | undefined): string | null {
 export async function fetchGrantsGovGrants(keyword: string): Promise<Grant[]> {
   const response = await axios.post<GrantsGovResponse>(
     'https://api.grants.gov/v1/api/search2',
-    { keyword, oppStatuses: 'posted' },
+    { keyword, oppStatuses: 'posted', rows: 50 },
     { headers: { 'Content-Type': 'application/json' } }
   );
 

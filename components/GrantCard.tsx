@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import SaveDeadlineButton from '@/components/SaveDeadlineButton';
+import SaveGrantButton from '@/components/SaveGrantButton';
 import type { SuccessPrediction } from '@/lib/types';
 
 export interface GrantProps {
@@ -197,7 +198,7 @@ export default function GrantCard({ grant, rank, index, onGenerateLetter, compar
 
   return (
     <article
-      className={`group rounded-xl border border-gray-200 bg-white p-5 shadow-sm flex flex-col gap-4 hover:shadow-md hover:border-gray-300 transition-all duration-200 ${index != null ? 'cursor-pointer' : ''}`}
+      className={`group rounded-xl border border-gray-200 bg-white p-5 shadow-sm flex flex-col gap-4 hover:shadow-md hover:border-gray-300 transition-all duration-200 h-full ${index != null ? 'cursor-pointer' : ''}`}
       onClick={handleCardClick}
     >
 
@@ -252,19 +253,18 @@ export default function GrantCard({ grant, rank, index, onGenerateLetter, compar
       )}
 
       {/* Meta row: amount + deadline */}
-      {(formattedAmount || grant.deadline) && (
-        <div className="flex flex-wrap gap-4 text-xs text-gray-500">
-          {formattedAmount && (
-            <span className="flex items-center gap-1">
-              <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <span className="font-medium text-gray-700">{formattedAmount}</span>
-            </span>
-          )}
-          {grant.deadline && <DeadlineCountdown deadline={grant.deadline} />}
-        </div>
-      )}
+      <div className="flex flex-wrap gap-4 text-xs text-gray-500">
+        <span className="flex items-center gap-1">
+          <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          {formattedAmount
+            ? <span className="font-medium text-gray-700">{formattedAmount}</span>
+            : <span className="text-gray-400 italic">Amount not specified</span>
+          }
+        </span>
+        {grant.deadline && <DeadlineCountdown deadline={grant.deadline} />}
+      </div>
 
       {/* Description snippet */}
       {grant.description && (
@@ -274,7 +274,7 @@ export default function GrantCard({ grant, rank, index, onGenerateLetter, compar
       )}
 
       {/* Footer: Generate Letter + Save Deadline + Compare */}
-      <div className="pt-1 border-t border-gray-100 flex items-center justify-between gap-2 flex-wrap">
+      <div className="mt-auto pt-1 border-t border-gray-100 flex items-center justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-2 flex-wrap">
         <div className="relative group/letter">
           <button
@@ -296,6 +296,20 @@ export default function GrantCard({ grant, rank, index, onGenerateLetter, compar
           )}
         </div>
 
+        {grant.url && (
+          <a
+            href={grant.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-green-50 border border-green-200 px-4 py-1.5 text-xs font-semibold text-green-700 hover:bg-green-100 hover:border-green-300 transition-colors"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+            </svg>
+            Apply
+          </a>
+        )}
         {!guestMode && grant.url && (
           <SaveDeadlineButton
             grantTitle={grant.title}
@@ -304,6 +318,9 @@ export default function GrantCard({ grant, rank, index, onGenerateLetter, compar
             fundingAmount={grant.amount}
             grantUrl={grant.url}
           />
+        )}
+        {!guestMode && (
+          <SaveGrantButton grant={grant} />
         )}
         </div>
 
