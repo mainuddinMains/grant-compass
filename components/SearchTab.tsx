@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import SearchBar from '@/components/SearchBar';
 import GrantCard from '@/components/GrantCard';
 import LetterModal from '@/components/LetterModal';
+import GrantFeed from '@/components/GrantFeed';
 import type { ResearcherProfile } from '@/components/ProfileForm';
 import { sampleGrants } from '@/lib/sampleGrants';
 import { RESULTS_KEY, SEARCH_KEY } from '@/app/grants/[id]/page';
@@ -573,15 +574,17 @@ export default function SearchTab({ initialQuery, preloadedResults, profile }: S
 
           {/* ── Welcome / empty state ──────────────────────────────── */}
           {!hasSearched && !isLoading && (
-            <div className="flex-1 flex flex-col items-center justify-center gap-6 py-16 text-center">
-              <div className="w-20 h-20 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-4xl shadow-inner">
-                🧭
-              </div>
-              <div>
-                <p className="text-xl font-semibold text-slate-700 dark:text-slate-200">Find your perfect grant</p>
-                <p className="mt-2 text-sm text-slate-400 dark:text-slate-500 max-w-md leading-relaxed">
-                  Describe your research above, or click a domain below to get started.
-                </p>
+            <div className="flex-1 flex flex-col items-center gap-6 py-10">
+              <div className="flex flex-col items-center gap-3 text-center">
+                <div className="w-16 h-16 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-3xl shadow-inner">
+                  🧭
+                </div>
+                <div>
+                  <p className="text-xl font-semibold text-slate-700 dark:text-slate-200">Find your perfect grant</p>
+                  <p className="mt-1 text-sm text-slate-400 dark:text-slate-500 max-w-md leading-relaxed">
+                    Describe your research above, or click a domain below to get started.
+                  </p>
+                </div>
               </div>
 
               {/* All domain chips — centered, wrapping */}
@@ -596,6 +599,14 @@ export default function SearchTab({ initialQuery, preloadedResults, profile }: S
                     {d.label}
                   </button>
                 ))}
+              </div>
+
+              {/* ── Personalized Grant Feed ─────────────────────── */}
+              <div className="w-full max-w-5xl">
+                <GrantFeed
+                  profile={profile}
+                  onSearchQuery={(q) => { setDescription(q); void handleSearch(q); }}
+                />
               </div>
             </div>
           )}
