@@ -43,3 +43,12 @@ next-env.d.ts
 # User data (passwords hashed, but exclude from git)
 /data/users.json
 /data/searches.json
+
+# OpenNext
+.open-next
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+!.env.example
