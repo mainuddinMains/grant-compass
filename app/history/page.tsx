@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { RESULTS_KEY, SEARCH_KEY } from '@/app/grants/[id]/page';
+import { RESULTS_KEY, SEARCH_KEY } from '@/lib/constants';
 
 interface HistoryEntry {
   id: string;
