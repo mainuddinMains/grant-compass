@@ -12,7 +12,7 @@ import GuestLanding from '@/components/GuestLanding';
 import ThemeToggle from '@/components/ThemeToggle';
 import type { ResearcherProfile } from '@/components/ProfileForm';
 import { sampleGrants } from '@/lib/sampleGrants';
-import { RESULTS_KEY, SEARCH_KEY } from '@/app/grants/[id]/page';
+import { RESULTS_KEY, SEARCH_KEY } from '@/lib/constants';
 import type { Grant } from '@/lib/nih';
 import type { GrantProps } from '@/components/GrantCard';
 import type { SuccessPrediction } from '@/lib/types';

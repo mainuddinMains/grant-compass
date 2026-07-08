@@ -11,8 +11,7 @@ import type { ResearcherProfile } from '@/components/ProfileForm';
 import type { Grant } from '@/lib/nih';
 import type { SuccessPrediction } from '@/lib/types';
 
-export const RESULTS_KEY = 'grant_compass_results';
-export const SEARCH_KEY = 'grant_compass_search';
+import { RESULTS_KEY, SEARCH_KEY } from '@/lib/constants';
 
 interface MatchResult {
   grantId: number;
