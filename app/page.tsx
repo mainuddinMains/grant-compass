@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-options';
 import ThemeToggle from '@/components/ThemeToggle';
+import FundingChart from '@/components/FundingChart';
 
 /* ── Static data ──────────────────────────────────────────────── */
 
@@ -232,6 +233,9 @@ export default async function LandingPage() {
           </div>
         </div>
       </section>
+
+      {/* ── Funding Chart ─────────────────────────────────────── */}
+      <FundingChart />
 
       {/* ── Features ──────────────────────────────────────────── */}
       <section className="bg-slate-50 dark:bg-slate-900/60 border-y border-slate-200 dark:border-slate-800 py-16 sm:py-24">

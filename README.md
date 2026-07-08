@@ -14,7 +14,7 @@ Click **Try Demo** on the homepage to run a pre-filled search about microplastic
 
 ---
 
-## Features
+## Features                                                                                 
 
 - **Natural-language search** — describe your research in plain English; no need to know grant IDs or agency codes
 - **Live data from NIH & NSF** — queries NIH Reporter v2 and NSF Awards API in parallel, deduplicates results
