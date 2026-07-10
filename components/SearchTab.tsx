@@ -7,6 +7,7 @@ import SearchBar from '@/components/SearchBar';
 import GrantCard from '@/components/GrantCard';
 import LetterModal from '@/components/LetterModal';
 import GrantFeed from '@/components/GrantFeed';
+import ActiveFundingByState from '@/components/ActiveFundingByState';
 import type { ResearcherProfile } from '@/components/ProfileForm';
 import { sampleGrants } from '@/lib/sampleGrants';
 import { RESULTS_KEY, SEARCH_KEY } from '@/lib/constants';
@@ -607,6 +608,11 @@ export default function SearchTab({ initialQuery, preloadedResults, profile }: S
                   profile={profile}
                   onSearchQuery={(q) => { setDescription(q); void handleSearch(q); }}
                 />
+              </div>
+
+              {/* ── Active Funding by State ──────────────────────── */}
+              <div className="w-full max-w-5xl">
+                <ActiveFundingByState />
               </div>
             </div>
           )}
