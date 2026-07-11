@@ -60,9 +60,89 @@ const STATE_NAMES: Record<string, string> = {
   WI: 'Wisconsin', WY: 'Wyoming',
 };
 
-// ── Sample Data ───────────────────────────────────────────────────
+// ── Mock data generator ───────────────────────────────────────────
 
-const DATA: Record<string, StateInfo> = {
+const MOCK_AGENCIES = [
+  'NIH – NCI', 'NIH – NHLBI', 'NIH – NINDS', 'NIH – NIA', 'NIH – NIMH',
+  'NIH – NIAID', 'NIH – NIBIB', 'NIH – NIMHD', 'NIH – NIDA', 'NSF', 'DOE',
+];
+
+const MOCK_TITLES = [
+  'Genomic Biomarkers for Early Disease Detection',
+  'Renewable Energy Integration in Rural Grids',
+  'AI-Assisted Diagnostic Imaging in Clinical Settings',
+  'Environmental Health Impact on Chronic Disease',
+  'Microbiome Diversity and Immune System Function',
+  'Sustainable Agriculture Water Use Optimization',
+  'Quantum Sensing for Precision Medical Diagnostics',
+  'Mental Health Intervention in Adolescent Populations',
+  'Carbon Capture Technologies for Industrial Emissions',
+  'Cybersecurity Resilience in Healthcare Networks',
+  'Next-Generation Photovoltaic Cell Development',
+  'Neuroplasticity and Cognitive Rehabilitation Methods',
+  'Precision Medicine for Rare Genetic Disorders',
+  'Smart Grid Infrastructure for Energy Efficiency',
+  'Infectious Disease Surveillance in Rural Communities',
+  'Advanced Polymer Materials for Targeted Drug Delivery',
+  'Remote Sensing for Forest Ecosystem Monitoring',
+  'Telemedicine Adoption in Medically Underserved Areas',
+  'Antibiotic Resistance Mechanisms in Bacterial Pathogens',
+  'Natural Disaster Preparedness and Community Resilience',
+  'Computational Biology for Protein Structure Prediction',
+  'Workforce Training for Clean Energy Transition',
+  'Social Determinants of Cardiovascular Health Outcomes',
+  'Geothermal Energy Resource Characterization',
+  'Single-Cell RNA Sequencing in Tumor Microenvironments',
+  'Autonomous Vehicles and Traffic Safety Systems',
+  'Gut-Brain Axis in Neurodevelopmental Disorders',
+  'Agricultural Drought Resistance via Epigenomics',
+];
+
+/**
+ * Generates deterministic mock StateInfo for a given two-letter state code.
+ * Uses an LCG seeded from the code so results are stable across renders.
+ */
+export function generateMockStateData(stateCode: string): StateInfo {
+  // Seed from character codes so each state always produces the same output
+  let seed = stateCode
+    .split('')
+    .reduce((h, c) => (((h << 5) - h + c.charCodeAt(0)) | 0) & 0x7fffffff, 0);
+
+  function next(n: number): number {
+    seed = ((seed * 1664525 + 1013904223) >>> 0) & 0x7fffffff;
+    return seed % n;
+  }
+
+  // Funding: $0.5M – $50M
+  const funding = parseFloat((0.5 + next(9950) / 200).toFixed(1));
+
+  const projectCount = 1 + next(4); // 1–4 projects
+  const usedTitles = new Set<number>();
+
+  const projects: Project[] = Array.from({ length: projectCount }, (_, i) => {
+    let titleIdx = next(MOCK_TITLES.length);
+    while (usedTitles.has(titleIdx)) {
+      titleIdx = (titleIdx + 1) % MOCK_TITLES.length;
+    }
+    usedTitles.add(titleIdx);
+
+    return {
+      id: `${stateCode.toLowerCase()}${i + 1}`,
+      title: MOCK_TITLES[titleIdx],
+      agency: MOCK_AGENCIES[next(MOCK_AGENCIES.length)],
+      amount: (200 + next(9800)) * 1_000, // $200K – $10M
+      daysRemaining: 7 + next(358),        // 7 – 365 days
+    };
+  });
+
+  return { funding, projects };
+}
+
+// ── State data ────────────────────────────────────────────────────
+// Hand-crafted entries for major research states; all others are
+// populated by generateMockStateData so every state renders.
+
+const HAND_CRAFTED: Record<string, StateInfo> = {
   CA: {
     funding: 42.6,
     projects: [
@@ -178,9 +258,20 @@ const DATA: Record<string, StateInfo> = {
   },
 };
 
+// Merge hand-crafted entries with generated entries for all remaining states
+const DATA: Record<string, StateInfo> = {
+  ...HAND_CRAFTED,
+  ...Object.fromEntries(
+    Object.values(FIPS)
+      .filter((code) => !Object.prototype.hasOwnProperty.call(HAND_CRAFTED, code))
+      .map((code) => [code, generateMockStateData(code)])
+  ),
+};
+
+// Dynamic ceiling derived from actual data so the gradient always spans correctly
+const MAX_FUNDING = Math.ceil(Math.max(...Object.values(DATA).map((d) => d.funding)));
+
 // ── Color scale (choropleth) ──────────────────────────────────────
-// Max tracked funding for normalization
-const MAX_FUNDING = 45;
 
 function lerp(a: number, b: number, t: number): number {
   return Math.round(a + (b - a) * t);
@@ -188,7 +279,7 @@ function lerp(a: number, b: number, t: number): number {
 
 function getStateFill(funding: number | null, isSelected: boolean, isDark: boolean): string {
   if (isSelected) return isDark ? '#818cf8' : '#4f46e5';
-  if (funding === null) return isDark ? '#1e293b' : '#e2e8f0'; // no data: slate-800 / slate-200
+  if (funding === null) return isDark ? '#1e293b' : '#e2e8f0';
 
   const t = Math.min(funding / MAX_FUNDING, 1);
 
@@ -201,14 +292,12 @@ function getStateFill(funding: number | null, isSelected: boolean, isDark: boole
 }
 
 function getHoverFill(funding: number | null, isDark: boolean): string {
-  if (funding === null) return isDark ? '#27374a' : '#cbd5e1'; // slightly brightened slate
+  if (funding === null) return isDark ? '#27374a' : '#cbd5e1';
   const t = Math.min(funding / MAX_FUNDING, 1);
 
   if (isDark) {
-    // shift ~20 brighter
     return `rgb(${lerp(70, 149, t)},${lerp(60, 160, t)},${lerp(150, 252, t)})`;
   }
-  // shift ~20 more saturated toward indigo-500
   return `rgb(${lerp(199, 67, t)},${lerp(210, 56, t)},${lerp(254, 202, t)})`;
 }
 
@@ -331,14 +420,13 @@ export default function ActiveFundingByState() {
                   const stateCode = FIPS[fips];
                   const info = stateCode ? DATA[stateCode] : undefined;
                   const isSelected = stateCode === selected;
-                  const hasData = !!info;
 
                   return (
                     <Geography
                       key={geo.rsmKey}
                       geography={geo}
                       onClick={() => {
-                        if (hasData && stateCode) {
+                        if (info && stateCode) {
                           setSelected((p) => (p === stateCode ? null : stateCode));
                           setTooltip(null);
                         }
@@ -368,7 +456,7 @@ export default function ActiveFundingByState() {
                           stroke: borderColor,
                           strokeWidth: 0.75,
                           outline: 'none',
-                          cursor: hasData ? 'pointer' : 'default',
+                          cursor: info ? 'pointer' : 'default',
                         },
                         pressed: {
                           fill: isDark ? '#818cf8' : '#4f46e5',
@@ -387,13 +475,6 @@ export default function ActiveFundingByState() {
           {/* Legend */}
           <div className="px-5 pb-4 flex items-center justify-between gap-4 flex-wrap">
             <div className="flex items-center gap-4">
-              <div className="flex items-center gap-1.5">
-                <div
-                  className="w-4 h-3 rounded-sm border border-slate-200 dark:border-slate-700"
-                  style={{ background: isDark ? '#1e293b' : '#e2e8f0' }}
-                />
-                <span className="text-[10px] text-slate-400 dark:text-slate-500">No data</span>
-              </div>
               <div className="flex flex-col gap-0.5">
                 <div
                   className="w-28 h-2 rounded-full"
@@ -405,7 +486,7 @@ export default function ActiveFundingByState() {
                 />
                 <div className="flex justify-between w-28">
                   <span className="text-[9px] text-slate-400 dark:text-slate-500">$0</span>
-                  <span className="text-[9px] text-slate-400 dark:text-slate-500">$43M+</span>
+                  <span className="text-[9px] text-slate-400 dark:text-slate-500">${MAX_FUNDING}M+</span>
                 </div>
               </div>
             </div>
@@ -484,7 +565,7 @@ export default function ActiveFundingByState() {
         </div>
       ) : (
         <p className="text-xs text-center text-slate-400 dark:text-slate-500 py-1">
-          Click a highlighted state to explore active grant projects
+          Click any state to explore active grant projects
         </p>
       )}
 
