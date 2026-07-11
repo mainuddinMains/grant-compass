@@ -53,6 +53,14 @@ const RESEARCH_FIELDS: Record<string, string[]> = {
   ],
 };
 
+const GLOBAL_COUNTRIES = [
+  { label: 'China',          flag: '🇨🇳', query: 'international research collaboration China scientific exchange funding' },
+  { label: 'Germany',        flag: '🇩🇪', query: 'international research collaboration Germany scientific exchange funding' },
+  { label: 'Japan',          flag: '🇯🇵', query: 'international research collaboration Japan scientific exchange funding' },
+  { label: 'South Korea',    flag: '🇰🇷', query: 'international research collaboration South Korea scientific exchange funding' },
+  { label: 'United Kingdom', flag: '🇬🇧', query: 'international research collaboration United Kingdom scientific exchange funding' },
+];
+
 const RESEARCH_DOMAINS = [
   { label: 'Neuroscience',            query: 'neuroscience and brain research' },
   { label: 'Cancer Biology',          query: 'cancer biology and oncology research' },
@@ -125,6 +133,7 @@ export default function SearchTab({ initialQuery, preloadedResults, profile }: S
   const [predictions, setPredictions] = useState<Record<number, SuccessPrediction>>({});
   const [predictingIndices, setPredictingIndices] = useState<Set<number>>(new Set());
   const [activeDomain, setActiveDomain] = useState<string | null>(null);
+  const [activeCountry, setActiveCountry] = useState<string | null>(null);
   const [domainSearch, setDomainSearch] = useState('');
   const [expandedField, setExpandedField] = useState<string | null>(null);
 
@@ -303,12 +312,30 @@ export default function SearchTab({ initialQuery, preloadedResults, profile }: S
 
   const handleDomainSelect = (domain: { label: string; query: string }) => {
     setActiveDomain(domain.label);
+    setActiveCountry(null);
     setDescription(domain.query);
     void handleSearch(domain.query);
   };
 
   const handleClearDomain = () => {
     setActiveDomain(null);
+    setActiveCountry(null);
+    setDescription('');
+    setMatchResults([]);
+    setHasSearched(false);
+    setSuggestions([]);
+    setError(null);
+  };
+
+  const handleCountrySelect = (country: typeof GLOBAL_COUNTRIES[0]) => {
+    setActiveCountry(country.label);
+    setActiveDomain(null);
+    setDescription(country.query);
+    void handleSearch(country.query);
+  };
+
+  const handleClearCountry = () => {
+    setActiveCountry(null);
     setDescription('');
     setMatchResults([]);
     setHasSearched(false);
@@ -527,6 +554,46 @@ export default function SearchTab({ initialQuery, preloadedResults, profile }: S
           )}
         </div>
 
+        {/* ── Global Intelligence ─────────────────────────────────── */}
+        <div className="px-4 py-3 border-t border-slate-100 dark:border-slate-700 flex-shrink-0">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+              Global Intelligence
+            </p>
+            {activeCountry && (
+              <button
+                onClick={handleClearCountry}
+                className="text-xs text-indigo-500 hover:text-indigo-700 font-medium transition-colors"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+          <div className="flex flex-col gap-0.5">
+            {GLOBAL_COUNTRIES.map((country) => {
+              const isActive = activeCountry === country.label;
+              return (
+                <button
+                  key={country.label}
+                  onClick={() => handleCountrySelect(country)}
+                  disabled={isLoading}
+                  className={`w-full text-left px-3 py-1.5 text-xs rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 ${
+                    isActive
+                      ? 'bg-indigo-50 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 font-semibold'
+                      : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700'
+                  }`}
+                >
+                  <span className="text-sm leading-none">{country.flag}</span>
+                  <span>{country.label}</span>
+                  {isActive && (
+                    <span className="ml-auto w-1.5 h-1.5 rounded-full bg-indigo-500 flex-shrink-0" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         {/* Footer hint */}
         <div className="px-4 py-3 border-t border-slate-100 dark:border-slate-700">
           <p className="text-xs text-slate-400 dark:text-slate-500 text-center leading-relaxed">
@@ -632,6 +699,12 @@ export default function SearchTab({ initialQuery, preloadedResults, profile }: S
                     <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-100 dark:bg-indigo-900/40 px-3 py-0.5 text-xs font-medium text-indigo-700 dark:text-indigo-300">
                       {activeDomain}
                       <button onClick={handleClearDomain} className="hover:text-indigo-900 leading-none">✕</button>
+                    </span>
+                  )}
+                  {activeCountry && (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-100 dark:bg-indigo-900/40 px-3 py-0.5 text-xs font-medium text-indigo-700 dark:text-indigo-300">
+                      {GLOBAL_COUNTRIES.find(c => c.label === activeCountry)?.flag} {activeCountry}
+                      <button onClick={handleClearCountry} className="hover:text-indigo-900 leading-none">✕</button>
                     </span>
                   )}
                 </div>
