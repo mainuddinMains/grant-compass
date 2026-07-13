@@ -6,6 +6,7 @@ import Link from 'next/link';
 import LetterModal from '@/components/LetterModal';
 import SaveDeadlineButton from '@/components/SaveDeadlineButton';
 import ChecklistCard from '@/components/ChecklistCard';
+import ApplyButton from '@/components/ApplyButton';
 import { loadProfile } from '@/components/ProfileForm';
 import type { ResearcherProfile } from '@/components/ProfileForm';
 import type { Grant } from '@/lib/nih';
@@ -489,17 +490,12 @@ export default function GrantDetailPage() {
             {/* CTA buttons */}
             <div className="flex flex-col gap-3">
               {grant.url && (
-                <a
-                  href={grant.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-500 px-5 py-3.5 text-sm font-bold text-white transition-colors shadow-sm"
-                >
-                  Apply Now
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                  </svg>
-                </a>
+                <ApplyButton
+                  grantTitle={grant.title}
+                  grantUrl={grant.url}
+                  agency={grant.agency}
+                  size="lg"
+                />
               )}
 
               <button
