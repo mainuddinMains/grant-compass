@@ -4,7 +4,10 @@ import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import ApplicationHistory from '@/components/ApplicationHistory';
 import { RESULTS_KEY, SEARCH_KEY } from '@/lib/constants';
+
+type Tab = 'search' | 'applications';
 
 interface HistoryEntry {
   id: string;
@@ -38,9 +41,154 @@ function ScoreChip({ score }: { score: number }) {
   );
 }
 
+// ── Search History tab content ────────────────────────────────────
+
+function SearchHistoryTab({
+  searches,
+  loading,
+  error,
+  profileComplete,
+  deleting,
+  onLoad,
+  onDelete,
+  onClearAll,
+}: {
+  searches: HistoryEntry[];
+  loading: boolean;
+  error: string;
+  profileComplete: boolean | null;
+  deleting: string | null;
+  onLoad: (entry: HistoryEntry) => void;
+  onDelete: (id: string) => void;
+  onClearAll: () => void;
+}) {
+  if (loading) {
+    return (
+      <div className="flex flex-col gap-3">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="animate-pulse rounded-2xl border border-slate-200 bg-white p-5 h-28" />
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-5">
+      {error && (
+        <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>
+      )}
+
+      {/* Profile nudge */}
+      {profileComplete === false && (
+        <Link
+          href="/search"
+          className="flex items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 hover:bg-amber-100 transition-colors group"
+        >
+          <div className="flex items-center gap-3">
+            <span className="text-xl">👤</span>
+            <div>
+              <p className="text-sm font-semibold text-amber-900">Complete your Researcher Profile</p>
+              <p className="text-xs text-amber-700 mt-0.5">
+                Add your university and department so Grant Compass can personalize your Letters of Intent.
+              </p>
+            </div>
+          </div>
+          <span className="flex-shrink-0 text-xs font-semibold text-amber-700 group-hover:text-amber-900 transition-colors">
+            Complete →
+          </span>
+        </Link>
+      )}
+
+      {searches.length === 0 ? (
+        <div className="flex flex-col items-center justify-center gap-4 py-24 text-center">
+          <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center text-3xl">
+            🔍
+          </div>
+          <div>
+            <p className="text-base font-semibold text-slate-700">No search history yet</p>
+            <p className="mt-1 text-sm text-slate-400">Your searches will appear here after you find grants.</p>
+          </div>
+          <Link
+            href="/search"
+            className="mt-2 inline-flex items-center gap-2 rounded-full bg-[#0f172a] px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-700 transition-colors"
+          >
+            Search Grants →
+          </Link>
+        </div>
+      ) : (
+        <>
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-slate-600">
+              {searches.length} saved search{searches.length !== 1 ? 'es' : ''}
+            </h2>
+            <button
+              onClick={onClearAll}
+              className="text-xs text-slate-400 hover:text-red-500 transition-colors"
+            >
+              Clear All
+            </button>
+          </div>
+
+          <div className="flex flex-col gap-3">
+            {searches.map((entry) => (
+              <div
+                key={entry.id}
+                className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm flex flex-col gap-3"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <p className="text-sm font-medium text-slate-800 leading-snug flex-1">
+                    {entry.searchDescription}
+                  </p>
+                  <button
+                    onClick={() => onDelete(entry.id)}
+                    disabled={deleting === entry.id}
+                    className="flex-shrink-0 text-slate-300 hover:text-red-400 transition-colors disabled:opacity-40"
+                    title="Delete"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
+                  <span className="flex items-center gap-1">
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    {formatDate(entry.timestamp)}
+                  </span>
+                  <span>{entry.grantsFound} grant{entry.grantsFound !== 1 ? 's' : ''} found</span>
+                  <ScoreChip score={entry.topMatchScore} />
+                </div>
+
+                <div className="pt-1 border-t border-slate-100">
+                  <button
+                    onClick={() => onLoad(entry)}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-50 border border-indigo-200 px-4 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 hover:border-indigo-300 transition-colors"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                    </svg>
+                    Load Results
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── Page ──────────────────────────────────────────────────────────
+
 export default function HistoryPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
+
+  const [activeTab, setActiveTab] = useState<Tab>('search');
   const [searches, setSearches] = useState<HistoryEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -54,15 +202,13 @@ export default function HistoryPage() {
     }
     if (status !== 'authenticated') return;
 
-    // Load history and profile check in parallel
     Promise.all([
       fetch('/api/history').then((r) => r.json()),
       fetch('/api/profile').then((r) => r.json()),
     ])
       .then(([historyData, profileData]) => {
         setSearches(historyData.searches ?? []);
-        const complete = !!(profileData.university && profileData.department && profileData.position);
-        setProfileComplete(complete);
+        setProfileComplete(!!(profileData.university && profileData.department && profileData.position));
       })
       .catch(() => setError('Failed to load history.'))
       .finally(() => setLoading(false));
@@ -89,7 +235,9 @@ export default function HistoryPage() {
     setSearches([]);
   };
 
-  if (status === 'loading' || (status === 'authenticated' && loading)) {
+  const isPageLoading = status === 'loading' || (status === 'authenticated' && loading);
+
+  if (isPageLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <svg className="animate-spin h-8 w-8 text-slate-400" fill="none" viewBox="0 0 24 24">
@@ -102,11 +250,15 @@ export default function HistoryPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
-      {/* Header */}
+
+      {/* ── Header ──────────────────────────────────────────────── */}
       <header className="bg-[#0f172a] text-white shadow-lg">
         <div className="mx-auto max-w-screen-2xl px-4 sm:px-8 lg:px-12 py-5">
           <div className="flex items-center gap-4">
-            <Link href="/search" className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-white transition-colors">
+            <Link
+              href="/search"
+              className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-white transition-colors"
+            >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
@@ -115,125 +267,98 @@ export default function HistoryPage() {
             <span className="text-slate-600">|</span>
             <div className="flex items-center gap-2">
               <span className="text-xl">📋</span>
-              <h1 className="text-xl font-bold">Search History</h1>
+              <h1 className="text-xl font-bold">History</h1>
             </div>
             {session?.user?.name && (
-              <span className="ml-auto text-xs text-slate-400">
-                {session.user.name}
-              </span>
+              <span className="ml-auto text-xs text-slate-400">{session.user.name}</span>
             )}
           </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-4xl w-full px-4 sm:px-8 py-8 flex flex-col gap-6">
+      {/* ── Tab bar ─────────────────────────────────────────────── */}
+      <div className="bg-white border-b border-slate-200 shadow-sm">
+        <div className="mx-auto max-w-4xl px-4 sm:px-8 flex gap-0">
+          <TabButton
+            active={activeTab === 'search'}
+            onClick={() => setActiveTab('search')}
+            icon={
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z" />
+              </svg>
+            }
+            label="Search History"
+            count={searches.length}
+          />
+          <TabButton
+            active={activeTab === 'applications'}
+            onClick={() => setActiveTab('applications')}
+            icon={
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+              </svg>
+            }
+            label="Application Tracking"
+          />
+        </div>
+      </div>
 
-        {error && (
-          <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>
-        )}
-
-        {/* Profile nudge */}
-        {profileComplete === false && (
-          <Link
-            href="/search"
-            className="flex items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 hover:bg-amber-100 transition-colors group"
-          >
-            <div className="flex items-center gap-3">
-              <span className="text-xl">👤</span>
-              <div>
-                <p className="text-sm font-semibold text-amber-900">Complete your Researcher Profile</p>
-                <p className="text-xs text-amber-700 mt-0.5">
-                  Add your university and department so Grant Compass can personalize your Letters of Intent.
-                </p>
-              </div>
-            </div>
-            <span className="flex-shrink-0 text-xs font-semibold text-amber-700 group-hover:text-amber-900 transition-colors">
-              Complete →
-            </span>
-          </Link>
-        )}
-
-        {searches.length === 0 && !loading ? (
-          <div className="flex flex-col items-center justify-center gap-4 py-24 text-center">
-            <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center text-3xl">
-              🔍
-            </div>
-            <div>
-              <p className="text-base font-semibold text-slate-700">No search history yet</p>
-              <p className="mt-1 text-sm text-slate-400">Your searches will appear here after you find grants.</p>
-            </div>
-            <Link
-              href="/search"
-              className="mt-2 inline-flex items-center gap-2 rounded-full bg-[#0f172a] px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-700 transition-colors"
-            >
-              Search Grants →
-            </Link>
-          </div>
+      {/* ── Main content ─────────────────────────────────────────── */}
+      <main className="mx-auto max-w-4xl w-full px-4 sm:px-8 py-8">
+        {activeTab === 'search' ? (
+          <SearchHistoryTab
+            searches={searches}
+            loading={loading}
+            error={error}
+            profileComplete={profileComplete}
+            deleting={deleting}
+            onLoad={handleLoad}
+            onDelete={handleDelete}
+            onClearAll={handleClearAll}
+          />
         ) : (
-          <>
-            <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-slate-600">
-                {searches.length} saved search{searches.length !== 1 ? 'es' : ''}
-              </h2>
-              <button
-                onClick={handleClearAll}
-                className="text-xs text-slate-400 hover:text-red-500 transition-colors"
-              >
-                Clear All
-              </button>
-            </div>
-
-            <div className="flex flex-col gap-3">
-              {searches.map((entry) => (
-                <div
-                  key={entry.id}
-                  className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm flex flex-col gap-3"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <p className="text-sm font-medium text-slate-800 leading-snug flex-1">
-                      {entry.searchDescription}
-                    </p>
-                    <button
-                      onClick={() => handleDelete(entry.id)}
-                      disabled={deleting === entry.id}
-                      className="flex-shrink-0 text-slate-300 hover:text-red-400 transition-colors disabled:opacity-40"
-                      title="Delete"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                    </button>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
-                    <span className="flex items-center gap-1">
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                      </svg>
-                      {formatDate(entry.timestamp)}
-                    </span>
-                    <span>{entry.grantsFound} grant{entry.grantsFound !== 1 ? 's' : ''} found</span>
-                    <ScoreChip score={entry.topMatchScore} />
-                  </div>
-
-                  <div className="pt-1 border-t border-slate-100">
-                    <button
-                      onClick={() => handleLoad(entry)}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-50 border border-indigo-200 px-4 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 hover:border-indigo-300 transition-colors"
-                    >
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                      </svg>
-                      Load Results
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </>
+          <ApplicationHistory />
         )}
-
       </main>
     </div>
+  );
+}
+
+// ── Tab button ────────────────────────────────────────────────────
+
+function TabButton({
+  active,
+  onClick,
+  icon,
+  label,
+  count,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  label: string;
+  count?: number;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex items-center gap-2 px-5 py-3.5 text-sm font-semibold border-b-2 transition-all duration-150 ${
+        active
+          ? 'border-indigo-600 text-indigo-700 bg-indigo-50/60'
+          : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'
+      }`}
+    >
+      <span className={active ? 'text-indigo-600' : 'text-slate-400'}>{icon}</span>
+      {label}
+      {count != null && count > 0 && (
+        <span
+          className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none ${
+            active ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-500'
+          }`}
+        >
+          {count}
+        </span>
+      )}
+    </button>
   );
 }
