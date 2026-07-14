@@ -60,7 +60,7 @@ export default function ApplyButton({
       });
 
       const data: {
-        workspace?: { workspaceId: string; workspaceLink: string };
+        workspace?: { workspaceId: string; workspaceLink: string; opportunityId?: string };
         error?: string;
         fallbackUrl?: string;
         notGrantsGov?: boolean;
@@ -87,6 +87,21 @@ export default function ApplyButton({
         workspaceId: data.workspace?.workspaceId,
         workspaceLink: data.workspace?.workspaceLink ?? grantUrl,
       });
+
+      // Persist to application tracking (fire-and-forget)
+      fetch('/api/applications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          grantTitle,
+          grantUrl,
+          agency,
+          opportunityId: opportunityId ?? data.workspace?.opportunityId,
+          workspaceId: data.workspace?.workspaceId,
+          workspaceLink: data.workspace?.workspaceLink,
+          status: 'Submitted to Grants.gov',
+        }),
+      }).catch(() => { /* non-critical */ });
     } catch {
       setState('error');
       setResult({
