@@ -64,9 +64,36 @@ export interface StoredSearch {
   fullResults: any[];
 }
 
+// ── Application tracking ──────────────────────────────────────────
+
+export type ApplicationStatus =
+  | 'Draft'
+  | 'Submitted to Grants.gov'
+  | 'Under Review'
+  | 'Awarded'
+  | 'Not Funded';
+
+export interface StoredApplication {
+  id: string;
+  userId: string;
+  grantTitle: string;
+  agency: string;
+  grantUrl: string;
+  opportunityId?: string;
+  workspaceId?: string;
+  workspaceLink?: string;
+  appliedAt: number;
+  lastUpdated: number;
+  status: ApplicationStatus;
+  notes?: string;
+  fundingAmount?: number | null;
+  deadline?: string | null;
+}
+
 const DATA_DIR = path.join(process.cwd(), 'data');
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
 const SEARCHES_FILE = path.join(DATA_DIR, 'searches.json');
+const APPLICATIONS_FILE = path.join(DATA_DIR, 'applications.json');
 
 async function ensureDir() {
   await fs.mkdir(DATA_DIR, { recursive: true });
@@ -98,4 +125,18 @@ export async function readSearches(): Promise<StoredSearch[]> {
 export async function writeSearches(searches: StoredSearch[]): Promise<void> {
   await ensureDir();
   await fs.writeFile(SEARCHES_FILE, JSON.stringify(searches, null, 2));
+}
+
+export async function readApplications(): Promise<StoredApplication[]> {
+  try {
+    const content = await fs.readFile(APPLICATIONS_FILE, 'utf8');
+    return JSON.parse(content);
+  } catch {
+    return [];
+  }
+}
+
+export async function writeApplications(applications: StoredApplication[]): Promise<void> {
+  await ensureDir();
+  await fs.writeFile(APPLICATIONS_FILE, JSON.stringify(applications, null, 2));
 }
