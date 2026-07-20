@@ -604,7 +604,7 @@ export default function SearchTab({ initialQuery, preloadedResults, profile }: S
 
       {/* ── Main Content ───────────────────────────────────────────── */}
       <main className="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-900">
-        <div className="p-6 xl:p-8 flex flex-col gap-5 min-h-full">
+        <div className="px-6 pb-6 pt-3 xl:px-8 xl:pb-8 xl:pt-4 flex flex-col gap-5 min-h-full">
 
           {/* ── Centered search bar (always visible at top) ────────── */}
           <div className="flex flex-col items-center gap-2">
