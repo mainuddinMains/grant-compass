@@ -8,6 +8,7 @@ import GrantCard from '@/components/GrantCard';
 import LetterModal from '@/components/LetterModal';
 import GrantFeed from '@/components/GrantFeed';
 import ActiveFundingByState from '@/components/ActiveFundingByState';
+import CountryFundingDiagram from '@/components/CountryFundingDiagram';
 import type { ResearcherProfile } from '@/components/ProfileForm';
 import { sampleGrants } from '@/lib/sampleGrants';
 import { RESULTS_KEY, SEARCH_KEY } from '@/lib/constants';
@@ -134,6 +135,7 @@ export default function SearchTab({ initialQuery, preloadedResults, profile }: S
   const [predictingIndices, setPredictingIndices] = useState<Set<number>>(new Set());
   const [activeDomain, setActiveDomain] = useState<string | null>(null);
   const [activeCountry, setActiveCountry] = useState<string | null>(null);
+  const [activeSector, setActiveSector] = useState<{ field: string; label: string } | null>(null);
   const [domainSearch, setDomainSearch] = useState('');
   const [expandedField, setExpandedField] = useState<string | null>(null);
 
@@ -313,6 +315,7 @@ export default function SearchTab({ initialQuery, preloadedResults, profile }: S
   const handleDomainSelect = (domain: { label: string; query: string }) => {
     setActiveDomain(domain.label);
     setActiveCountry(null);
+    setActiveSector(null);
     setDescription(domain.query);
     void handleSearch(domain.query);
   };
@@ -320,6 +323,7 @@ export default function SearchTab({ initialQuery, preloadedResults, profile }: S
   const handleClearDomain = () => {
     setActiveDomain(null);
     setActiveCountry(null);
+    setActiveSector(null);
     setDescription('');
     setMatchResults([]);
     setHasSearched(false);
@@ -330,17 +334,36 @@ export default function SearchTab({ initialQuery, preloadedResults, profile }: S
   const handleCountrySelect = (country: typeof GLOBAL_COUNTRIES[0]) => {
     setActiveCountry(country.label);
     setActiveDomain(null);
+    setActiveSector(null);
     setDescription(country.query);
     void handleSearch(country.query);
   };
 
   const handleClearCountry = () => {
     setActiveCountry(null);
+    setActiveSector(null);
     setDescription('');
     setMatchResults([]);
     setHasSearched(false);
     setSuggestions([]);
     setError(null);
+  };
+
+  const handleSectorClick = (query: string, field: string, label: string) => {
+    setActiveSector({ field, label });
+    setDescription(query);
+    void handleSearch(query);
+  };
+
+  const handleClearSector = () => {
+    setActiveSector(null);
+    if (activeCountry) {
+      const country = GLOBAL_COUNTRIES.find((c) => c.label === activeCountry);
+      if (country) {
+        setDescription(country.query);
+        void handleSearch(country.query);
+      }
+    }
   };
 
   const filteredSidebarDomains = RESEARCH_DOMAINS.filter(d =>
@@ -640,6 +663,17 @@ export default function SearchTab({ initialQuery, preloadedResults, profile }: S
             </div>
           )}
 
+          {/* ── Country Funding Diagram ────────────────────────────── */}
+          {activeCountry && hasSearched && (
+            <CountryFundingDiagram
+              countryLabel={activeCountry}
+              flag={GLOBAL_COUNTRIES.find((c) => c.label === activeCountry)?.flag ?? ''}
+              activeSector={activeSector}
+              onSectorClick={handleSectorClick}
+              onClearSector={handleClearSector}
+            />
+          )}
+
           {/* ── Welcome / empty state ──────────────────────────────── */}
           {!hasSearched && !isLoading && (
             <div className="flex-1 flex flex-col items-center gap-6 py-10">
@@ -705,6 +739,12 @@ export default function SearchTab({ initialQuery, preloadedResults, profile }: S
                     <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-100 dark:bg-indigo-900/40 px-3 py-0.5 text-xs font-medium text-indigo-700 dark:text-indigo-300">
                       {GLOBAL_COUNTRIES.find(c => c.label === activeCountry)?.flag} {activeCountry}
                       <button onClick={handleClearCountry} className="hover:text-indigo-900 leading-none">✕</button>
+                    </span>
+                  )}
+                  {activeSector && (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-violet-100 dark:bg-violet-900/40 px-3 py-0.5 text-xs font-medium text-violet-700 dark:text-violet-300">
+                      {activeSector.label}
+                      <button onClick={handleClearSector} className="hover:text-violet-900 leading-none">✕</button>
                     </span>
                   )}
                 </div>
